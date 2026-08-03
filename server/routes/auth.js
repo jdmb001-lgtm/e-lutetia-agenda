@@ -13,6 +13,8 @@ function generateToken() {
 }
 
 function publicUser(u) {
+  let holidays = [];
+  try { holidays = JSON.parse(u.holidays || '[]'); } catch (_) {}
   return {
     id: u.id,
     email: u.email,
@@ -23,6 +25,8 @@ function publicUser(u) {
     about: u.about,
     role: u.role || 'user',
     agency_id: u.agency_id || null,
+    holidays,
+    max_daily_meetings: Number(u.max_daily_meetings) || 0,
   };
 }
 

@@ -10,7 +10,8 @@ function getEventBySlug(username, slug) {
     .prepare(
       `SELECT e.*, u.username, u.name AS host_name, u.email AS host_email,
               u.timezone AS host_timezone, u.about AS host_about,
-              u.brand_color AS host_brand_color
+              u.brand_color AS host_brand_color,
+              u.holidays, u.max_daily_meetings
        FROM event_types e JOIN users u ON u.id = e.user_id
        WHERE u.username = ? AND e.slug = ?`
     )
@@ -43,6 +44,113 @@ function publicEvent(e) {
     availability: windows,
   };
 }
+
+function getSingleLink(token) {
+  return db.prepare(`
+    SELECT s.*, e.*, u.username, u.name AS host_name, u.email AS host_email,
+           u.timezone AS host_timezone, u.about AS host_about, u.brand_color AS host_brand_color,
+           u.holidays, u.max_daily_meetings
+    FROM single_use_links s
+    JOIN event_types e ON e.id = s.event_type_id
+    JOIN users u ON u.id = s.user_id
+    WHERE s.token = ?
+  `).get(token);
+}
+
+router.get('/single/:token', (req, res) => {
+  const link = getSingleLink(req.params.token);
+  if (!link) return res.status(404).json({ error: 'Lien invalide' });
+  if (link.used) return res.status(410).json({ error: 'Ce lien a déjà été utilisé' });
+  if (link.expires_at && new Date(link.expires_at) < new Date()) {
+    return res.status(410).json({ error: 'Ce lien a expiré' });
+  }
+  res.json({ ...publicEvent(link), single_use: true, token: link.token });
+});
+
+router.get('/single/:token/month', (req, res) => {
+  const link = getSingleLink(req.params.token);
+  if (!link || link.used) return res.status(404).json({ error: 'Lien invalide' });
+  const year = parseInt(req.query.year, 10), month = parseInt(req.query.month, 10);
+  if (!year || !month || month < 1 || month > 12) return res.status(400).json({ error: 'Date invalide' });
+  res.json(monthOverview(link, link, year, month, new Date().toISOString()));
+});
+
+router.get('/single/:token/day', (req, res) => {
+  const link = getSingleLink(req.params.token);
+  if (!link || link.used) return res.status(404).json({ error: 'Lien invalide' });
+  const date = req.query.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ error: 'Date invalide' });
+  const slots = computeSlotsForDay(link, link, date, new Date().toISOString());
+  res.json({ slots: slots.map((s) => ({ start: s.start.toISO(), end: s.end.toISO() })) });
+});
+
+router.post('/single/:token/book', async (req, res) => {
+  const link = getSingleLink(req.params.token);
+  if (!link) return res.status(404).json({ error: 'Lien invalide' });
+  if (link.used) return res.status(410).json({ error: 'Ce lien a déjà été utilisé' });
+  const { name, email, notes, start, timezone } = req.body || {};
+  if (!name || !email) return res.status(400).json({ error: 'Nom et email requis' });
+  if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Email invalide' });
+  const check = isSlotAvailable(link, link, start, link.duration);
+  if (!check.ok) return res.status(409).json({ error: "Ce créneau n'est plus disponible." });
+  const endIso = new Date(new Date(start).getTime() + link.duration * 60000).toISOString();
+  const info = db.prepare(
+    'INSERT INTO bookings (event_type_id, user_id, invitee_name, invitee_email, invitee_notes, invitee_timezone, start_time, end_time, status, created_at) VALUES (?,?,?,?,?,?,?,?,\'confirmed\',?)'
+  ).run(link.event_type_id, link.user_id, name.trim(), email.trim(), (notes||'').trim(), timezone||'UTC', new Date(start).toISOString(), endIso, new Date().toISOString());
+  db.prepare('UPDATE single_use_links SET used=1 WHERE token=?').run(req.params.token);
+  res.status(201).json({ booking: { id: info.lastInsertRowid } });
+});
+
+// ===========================================================================
+// Sondages de réunion (polls)
+// ===========================================================================
+router.get('/poll/:slug', (req, res) => {
+  const p = db.prepare(`
+    SELECT p.*, e.name AS event_name, e.duration, e.location_detail, e.location_type,
+           u.username, u.name AS host_name, u.brand_color AS host_brand_color,
+           u.timezone AS host_timezone
+    FROM polls p
+    JOIN event_types e ON e.id = p.event_type_id
+    JOIN users u ON u.id = p.user_id
+    WHERE p.slug = ?
+  `).get(req.params.slug);
+  if (!p) return res.status(404).json({ error: 'Sondage introuvable' });
+  const slots = db.prepare('SELECT * FROM poll_slots WHERE poll_id=? ORDER BY start_time ASC').all(p.id);
+  res.json({
+    id: p.id,
+    title: p.title,
+    host_name: p.host_name,
+    username: p.username,
+    brand_color: p.brand_color,
+    event_name: p.event_name,
+    duration: p.duration,
+    location_detail: p.location_detail,
+    location_type: p.location_type,
+    host_timezone: p.host_timezone,
+    slots: slots.map((s) => ({ id: s.id, start_time: s.start_time, end_time: s.end_time })),
+  });
+});
+
+router.post('/poll/:slug/vote', (req, res) => {
+  const p = db.prepare('SELECT * FROM polls WHERE slug=?').get(req.params.slug);
+  if (!p) return res.status(404).json({ error: 'Sondage introuvable' });
+  const { slot_id, name, email } = req.body || {};
+  if (!slot_id || !name || !email) return res.status(400).json({ error: 'Champs requis' });
+  const slot = db.prepare('SELECT * FROM poll_slots WHERE id=? AND poll_id=?').get(slot_id, p.id);
+  if (!slot) return res.status(400).json({ error: 'Créneau invalide' });
+  // Vérifier le doublon par email
+  const dup = db.prepare('SELECT id FROM poll_votes WHERE poll_id=? AND LOWER(invitee_email)=?').get(p.id, email.toLowerCase().trim());
+  if (dup) return res.status(400).json({ error: 'Vous avez déjà voté pour ce sondage' });
+  db.prepare('INSERT INTO poll_votes (poll_slot_id, poll_id, invitee_name, invitee_email, created_at) VALUES (?,?,?,?,?)')
+    .run(slot.id, p.id, name.trim(), email.trim(), new Date().toISOString());
+  // Compter les votes
+  const counts = db.prepare(`
+    SELECT poll_slot_id, COUNT(*) AS n FROM poll_votes WHERE poll_id=? GROUP BY poll_slot_id
+  `).all(p.id);
+  res.status(201).json({ ok: true, message: 'Vote enregistré', counts });
+});
+
+
 
 // Infos de la page de réservation publique
 router.get('/:username/:slug', (req, res) => {
@@ -141,4 +249,7 @@ router.post('/:username/:slug/book', async (req, res) => {
   });
 });
 
+// ===========================================================================
+// Liens à usage unique : infos de l'événement via le token
+// ===========================================================================
 module.exports = router;

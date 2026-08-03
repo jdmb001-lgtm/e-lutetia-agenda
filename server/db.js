@@ -82,6 +82,44 @@ CREATE TABLE IF NOT EXISTS agencies (
   slug       TEXT UNIQUE NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS single_use_links (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_type_id INTEGER NOT NULL REFERENCES event_types(id) ON DELETE CASCADE,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token         TEXT UNIQUE NOT NULL,
+  used          INTEGER NOT NULL DEFAULT 0,
+  expires_at    TEXT,
+  created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS polls (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_type_id INTEGER NOT NULL REFERENCES event_types(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL,
+  slug          TEXT UNIQUE NOT NULL,
+  created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS poll_slots (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  poll_id    INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  start_time TEXT NOT NULL,
+  end_time   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS poll_votes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  poll_slot_id INTEGER NOT NULL REFERENCES poll_slots(id) ON DELETE CASCADE,
+  poll_id    INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  invitee_name  TEXT NOT NULL,
+  invitee_email TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sul_token ON single_use_links(token);
+CREATE INDEX IF NOT EXISTS idx_poll_slug ON polls(slug);
 `);
 
 // ---------------------------------------------------------------------------
@@ -95,6 +133,8 @@ function ensureColumn(table, column, ddl) {
 }
 ensureColumn('users', 'role', `role TEXT NOT NULL DEFAULT 'user'`);
 ensureColumn('users', 'agency_id', `agency_id INTEGER REFERENCES agencies(id) ON DELETE SET NULL`);
+ensureColumn('users', 'holidays', `holidays TEXT NOT NULL DEFAULT '[]'`);
+ensureColumn('users', 'max_daily_meetings', `max_daily_meetings INTEGER NOT NULL DEFAULT 0`);
 
 // Le tout premier utilisateur créé devient automatiquement administrateur
 const firstUser = db.prepare('SELECT id FROM users ORDER BY id ASC LIMIT 1').get();

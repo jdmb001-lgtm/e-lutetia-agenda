@@ -1,5 +1,6 @@
 const { DateTime, IANAZone } = require('luxon');
 const db = require('../db');
+const { getFrenchHolidays } = require('./frenchHolidays');
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -17,12 +18,31 @@ function parseAvailability(raw) {
   }
 }
 
+// Jours bloqués par les jours fériés français sélectionnés + jours personnalisés.
+// Seuls les jours présents dans user.holidays (dates ISO 'YYYY-MM-DD') sont bloqués.
+function userBlockedDates(user) {
+  const set = new Set();
+  try {
+    const sel = JSON.parse(user.holidays || '[]');
+    for (const item of sel) {
+      if (typeof item === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item)) {
+        set.add(item);
+      }
+    }
+  } catch (_) {}
+  return set;
+}
+
 // Renvoie [{start, end}] ISO UTC pour une journée donnée (date YYYY-MM-DD dans le fuseau de l'hôte)
 function computeSlotsForDay(eventType, user, localDateStr, nowIso) {
   const tz = user.timezone || user.host_timezone || "UTC";
   const avail = parseAvailability(eventType.availability);
   const dayStart = DateTime.fromISO(localDateStr, { zone: tz });
   if (!dayStart.isValid) return [];
+
+  // Jour férié sélectionné ou personnalisé -> indisponible
+  const blocked = userBlockedDates(user);
+  if (blocked.has(localDateStr)) return [];
 
   const dow = dayStart.weekday; // 1..7
   const windows = avail[weekdayKeyFromNumber(dow)] || [];
@@ -72,13 +92,32 @@ function computeSlotsForDay(eventType, user, localDateStr, nowIso) {
     });
   }
 
+  // Limite de réunions par jour (niveau compte)
+  const dailyLimit = Number(user.max_daily_meetings) || 0;
+  let dayBookingCount = 0;
+  if (dailyLimit > 0) {
+    dayBookingCount = db.prepare(`
+      SELECT COUNT(*) AS n FROM bookings
+      WHERE user_id=? AND status='confirmed'
+        AND start_time >= ? AND start_time < ?
+    `).get(user.id, dayStart.toUTC().toISO(), dayStart.plus({ days: 1 }).toUTC().toISO()).n;
+  }
+
   const overlaps = (s, e, range) => s < range.end && e > range.start;
 
   const slots = candidates.filter((c) => {
     const s = c.start.toJSDate();
     const e = c.end.toJSDate();
-    return !occupied.some((r) => overlaps(s, e, r));
+    if (occupied.some((r) => overlaps(s, e, r))) return false;
+    return true;
   });
+
+  // Appliquer la limite quotidienne : on ne garde que les premiers créneaux
+  if (dailyLimit > 0) {
+    const remaining = dailyLimit - dayBookingCount;
+    if (remaining <= 0) return [];
+    return slots.slice(0, remaining);
+  }
 
   return slots;
 }

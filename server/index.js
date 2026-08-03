@@ -8,6 +8,7 @@ const eventsRouter = require('./routes/events');
 const bookingsRouter = require('./routes/bookings');
 const settingsRouter = require('./routes/settings');
 const adminRouter = require('./routes/admin');
+const schedulingRouter = require('./routes/scheduling');
 const publicRouter = require('./routes/public');
 const { startScheduler } = require('./lib/workflows');
 
@@ -25,6 +26,7 @@ app.use('/api/events', eventsRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/scheduling', schedulingRouter);
 app.use('/api/public', publicRouter);
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -45,6 +47,16 @@ const pages = {
 for (const [route, file] of Object.entries(pages)) {
   app.get(route, (req, res) => res.sendFile(path.join(PUBLIC_DIR, file)));
 }
+
+// ===== Lien à usage unique : /single/:token =====
+app.get('/single/:token', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'booking-single.html'));
+});
+
+// ===== Sondage de réunion : /p/:slug =====
+app.get('/p/:slug', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'poll.html'));
+});
 
 // ===== Page de réservation publique : /:username/:slug =====
 app.get('/:username/:slug', (req, res, next) => {

@@ -77,6 +77,8 @@ function fmtTime(iso, tz) {
     if (user.role === 'admin') {
       $('#nav-team').classList.remove('hidden');
     }
+    $('#nav-links').classList.remove('hidden');
+    $('#nav-availability').classList.remove('hidden');
     bindNav();
     bindLogout();
     render();
@@ -104,12 +106,14 @@ function bindLogout() {
 
 // ============================ Router ============================
 function render() {
-  const titles = { events: 'Types d\'événements', bookings: 'Réservations', settings: 'Paramètres', team: 'Équipe & Agences' };
+  const titles = { events: 'Types d\'événements', bookings: 'Réservations', settings: 'Paramètres', team: 'Équipe & Agences', links: 'Liens & Sondages', availability: 'Disponibilité' };
   $('#page-title').textContent = titles[state.tab];
   $('#crumb').textContent = 'Tableau de bord';
   if (state.tab === 'events') renderEvents();
   else if (state.tab === 'bookings') renderBookings();
   else if (state.tab === 'team') renderTeam();
+  else if (state.tab === 'links') renderLinks();
+  else if (state.tab === 'availability') renderAvailability();
   else renderSettings();
 }
 
@@ -755,4 +759,178 @@ async function delUser(id) {
     await api(`/api/admin/users/${id}`, { method: 'DELETE' });
     toast('Compte supprimé'); renderTeam();
   } catch (e) { toast(e.message); }
+}
+
+// ============================ Liens & Sondages ============================
+async function renderLinks() {
+  const content = $('#content');
+  content.innerHTML = `<div class="spinner"></div>`;
+  try {
+    const [links, polls, events] = await Promise.all([
+      api('/api/scheduling/single-use-links'),
+      api('/api/scheduling/polls'),
+      api('/api/events'),
+    ]);
+    const eventOpts = events.map(e => `<option value="${e.id}">${esc(e.name)} (${e.duration} min)</option>`).join('');
+
+    const linkRows = links.map(l => `
+      <div class="event-row" style="cursor:default;">
+        <div class="left">
+          <div class="colorbar" style="background:${l.used?'#d4d4d8':'#16a34a'}"></div>
+          <div>
+            <div class="e-name">${esc(l.event_name)} ${l.used?'<span class="badge badge-gray">Utilisé</span>':'<span class="badge badge-green">Actif</span>'}</div>
+            <div class="e-meta"><a href="${l.url}" target="_blank" onclick="event.stopPropagation()">https://elutetia-agenda.fr${l.url}</a></div>
+          </div>
+        </div>
+        <div class="e-actions">
+          <button class="btn btn-secondary btn-sm" data-copy="${l.url}">Copier</button>
+          <button class="btn btn-danger btn-sm" data-link-del="${l.id}">Supprimer</button>
+        </div>
+      </div>`).join('');
+
+    const pollRows = polls.map(p => `
+      <div class="event-row" style="cursor:default;">
+        <div class="left">
+          <div class="colorbar" style="background:#8b5cf6"></div>
+          <div>
+            <div class="e-name">${esc(p.title)}</div>
+            <div class="e-meta">${esc(p.event_name)} · ${p.slots.length} créneau(x) · <a href="${p.url}" target="_blank" onclick="event.stopPropagation()">https://elutetia-agenda.fr${p.url}</a></div>
+          </div>
+        </div>
+        <div class="e-actions"><button class="btn btn-secondary btn-sm" data-copy="${p.url}">Copier</button>
+          <button class="btn btn-danger btn-sm" data-poll-del="${p.id}">Supprimer</button></div>
+      </div>`).join('');
+
+    content.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:16px;">
+        <button class="btn btn-secondary" id="new-link">+ Lien à usage unique</button>
+        <button class="btn btn-primary" id="new-poll">+ Sondage de réunion</button>
+      </div>
+      <div class="card"><div class="card-head"><h2>Liens à usage unique</h2></div>
+        ${linkRows ? linkRows : '<div class="empty"><h3>Aucun lien</h3><p>Un lien à usage unique permet à un invité de réserver une seule fois.</p></div>'}</div>
+      <div class="card"><div class="card-head"><h2>Sondages de réunion</h2></div>
+        ${pollRows ? pollRows : '<div class="empty"><h3>Aucun sondage</h3><p>Proposez plusieurs créneaux à vos invités pour choisir le meilleur.</p></div>'}</div>
+    `;
+
+    $('#new-link').addEventListener('click', () => {
+      if (!events.length) return toast('Créez d\'abord un type d\'événement');
+      const overlay = document.createElement('div'); overlay.className='modal-overlay';
+      overlay.innerHTML = `<div class="modal"><div class="modal-head"><h3>Lien à usage unique</h3><button class="close">×</button></div>
+        <div class="modal-body"><div class="field"><label>Type d'événement</label><select id="l-event">${eventOpts}</select></div>
+        <p style="font-size:13px;color:var(--muted)">Ce lien fonctionnera pour UNE seule réservation.</p></div>
+        <div class="modal-foot"><button class="btn btn-secondary" data-act="cancel">Annuler</button><button class="btn btn-primary" data-act="save">Créer le lien</button></div></div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector('.close').addEventListener('click',()=>overlay.remove());
+      overlay.querySelector('[data-act="cancel"]').addEventListener('click',()=>overlay.remove());
+      overlay.querySelector('[data-act="save"]').addEventListener('click', async ()=>{
+        const r = await api('/api/scheduling/single-use-links',{method:'POST',body:{event_type_id:$('#l-event',overlay).value}});
+        overlay.remove(); toast('Lien créé'); renderLinks();
+      });
+    });
+
+    $('#new-poll').addEventListener('click', () => {
+      if (!events.length) return toast('Créez d\'abord un type d\'événement');
+      const overlay = document.createElement('div'); overlay.className='modal-overlay';
+      overlay.innerHTML = `<div class="modal"><div class="modal-head"><h3>Sondage de réunion</h3><button class="close">×</button></div>
+        <div class="modal-body">
+          <div class="field"><label>Titre</label><input type="text" id="po-title" placeholder="ex. Choix de créneau"></div>
+          <div class="field"><label>Type d'événement</label><select id="po-event">${eventOpts}</select></div>
+          <div class="field"><label>Créneaux proposés</label><div id="po-slots"></div>
+          <button class="btn btn-secondary btn-sm" id="po-add" style="margin-top:8px;">+ Ajouter un créneau</button></div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-secondary" data-act="cancel">Annuler</button><button class="btn btn-primary" data-act="save">Créer le sondage</button></div></div>`;
+      document.body.appendChild(overlay);
+      const slotsBox = overlay.querySelector('#po-slots');
+      function addSlotRow(start, end){
+        const row=document.createElement('div'); row.className='avail-window'; row.style.marginBottom='8px';
+        row.innerHTML=`<input type="datetime-local" class="ps-start" value="${start||''}"><input type="datetime-local" class="ps-end" value="${end||''}"><button class="rm" type="button">×</button>`;
+        row.querySelector('.rm').addEventListener('click',()=>row.remove());
+        slotsBox.appendChild(row);
+      }
+      addSlotRow(); addSlotRow();
+      overlay.querySelector('#po-add').addEventListener('click',()=>addSlotRow());
+      overlay.querySelector('.close').addEventListener('click',()=>overlay.remove());
+      overlay.querySelector('[data-act="cancel"]').addEventListener('click',()=>overlay.remove());
+      overlay.querySelector('[data-act="save"]').addEventListener('click', async ()=>{
+        const slots=[];
+        overlay.querySelectorAll('.ps-start').forEach((el,i)=>{
+          const s=el.value, e=overlay.querySelectorAll('.ps-end')[i].value;
+          if(s&&e) slots.push({start:s,end:e});
+        });
+        if(!slots.length) return toast('Ajoutez au moins un créneau');
+        await api('/api/scheduling/polls',{method:'POST',body:{title:$('#po-title',overlay).value,event_type_id:$('#po-event',overlay).value,slots}});
+        overlay.remove(); toast('Sondage créé'); renderLinks();
+      });
+    });
+
+    // copier
+    $$('[data-copy]').forEach(b=>b.addEventListener('click',()=>{
+      const url='https://elutetia-agenda.fr'+b.dataset.copy;
+      navigator.clipboard.writeText(url); toast('Lien copié');
+    }));
+    $$('[data-link-del]').forEach(b=>b.addEventListener('click',async()=>{
+      await api(`/api/scheduling/single-use-links/${b.dataset.linkDel}`,{method:'DELETE'}); toast('Lien supprimé'); renderLinks();
+    }));
+    $$('[data-poll-del]').forEach(b=>b.addEventListener('click',async()=>{
+      await api(`/api/scheduling/polls/${b.dataset.pollDel}`,{method:'DELETE'}); toast('Sondage supprimé'); renderLinks();
+    }));
+  } catch(e){ content.innerHTML=`<div class="card"><div class="error-msg" style="padding:20px">${esc(e.message)}</div></div>`; }
+}
+
+// ============================ Disponibilité avancée ============================
+async function renderAvailability() {
+  const content = $('#content');
+  content.innerHTML = `<div class="spinner"></div>`;
+  try {
+    const holidays = await api('/api/settings/holidays-list');
+    const me = await api('/api/auth/me');
+    const user = me.user;
+    const currentHolidays = user.holidays || [];
+    const currentMax = user.max_daily_meetings || 0;
+
+    // Toggle jour férié
+    const holidayToggle = (d, label) => `<div class="avail-day" style="align-items:center;">
+      <span class="toggle"><input type="checkbox" class="holiday-check" data-date="${d}" ${currentHolidays.includes(d)?'checked':''}></span>
+      <label style="font-weight:600;">${label}</label><span style="color:var(--muted);font-size:13px;">${d}</span></div>`;
+
+    content.innerHTML = `
+      <div class="card"><div class="card-head"><h2>Limites de réunions</h2></div>
+        <div class="card-body">
+          <div class="field"><label>Nombre maximal de rendez-vous par jour</label>
+            <input type="number" id="max-daily" min="0" value="${currentMax}" placeholder="0 = illimité">
+            <div class="hint">Au-delà de ce nombre, les créneaux du jour deviennent indisponibles. 0 = illimité.</div></div>
+          <button class="btn btn-primary" id="save-limit">Enregistrer la limite</button>
+          <div class="error-msg" id="limit-err"></div>
+        </div></div>
+      <div class="card"><div class="card-head"><h2>Jours fériés (France)</h2></div>
+        <div class="card-body">
+          <p style="font-size:14px;color:var(--muted);margin-bottom:14px;">Les jours cochés seront automatiquement indisponibles pour toutes vos réservations.</p>
+          <div id="holiday-list">
+            ${holidays.map(d => holidayToggle(d, new Date(d+'T00:00:00Z').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))).join('')}
+          </div>
+          <button class="btn btn-primary" id="save-holidays" style="margin-top:14px;">Enregistrer les jours fériés</button>
+          <div class="error-msg" id="holiday-err"></div>
+        </div></div>
+    `;
+
+    $('#save-limit').addEventListener('click', async ()=>{
+      const err=$('#limit-err'); err.textContent='';
+      try{
+        const val = $('#max-daily').value;
+        const holidays = user.holidays || [];
+        await api('/api/settings',{method:'PUT',body:{max_daily_meetings:val, holidays}});
+        state.user.max_daily_meetings = val;
+        toast('Limite enregistrée');
+      }catch(e){ err.textContent=e.message; }
+    });
+
+    $('#save-holidays').addEventListener('click', async ()=>{
+      const err=$('#holiday-err'); err.textContent='';
+      const selected = $$('.holiday-check:checked').map(c=>c.dataset.date);
+      try{
+        await api('/api/settings',{method:'PUT',body:{holidays:selected, max_daily_meetings:user.max_daily_meetings||0}});
+        toast('Jours fériés enregistrés');
+      }catch(e){ err.textContent=e.message; }
+    });
+  } catch(e){ content.innerHTML=`<div class="card"><div class="error-msg" style="padding:20px">${esc(e.message)}</div></div>`; }
 }

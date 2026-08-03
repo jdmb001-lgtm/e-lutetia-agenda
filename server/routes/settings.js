@@ -1,11 +1,29 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('./auth');
+const { getFrenchHolidays } = require('../lib/frenchHolidays');
 
 const router = express.Router();
 router.use(requireAuth);
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+// Liste des jours fériés français (dates prochaines) pour le réglage
+router.get('/holidays-list', (req, res) => {
+  const tz = req.user.timezone || 'Europe/Paris';
+  const now = new Date();
+  const years = [now.getFullYear(), now.getFullYear() + 1];
+  const list = [];
+  for (const y of years) {
+    for (const d of getFrenchHolidays(y)) {
+      const dt = new Date(d + 'T00:00:00Z');
+      if (dt >= now) list.push(d);
+    }
+  }
+  // Trier par date
+  list.sort();
+  res.json(list);
+});
 
 router.put('/', (req, res) => {
   const b = req.body || {};
@@ -16,12 +34,14 @@ router.put('/', (req, res) => {
   const taken = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, u.id);
   if (taken) return res.status(400).json({ error: 'Ce nom est déjà pris' });
 
-  db.prepare('UPDATE users SET username=?, name=?, timezone=?, brand_color=?, about=? WHERE id=?').run(
+  db.prepare('UPDATE users SET username=?, name=?, timezone=?, brand_color=?, about=?, holidays=?, max_daily_meetings=? WHERE id=?').run(
     username,
     (b.name || u.name).trim(),
     b.timezone || u.timezone,
     b.brand_color || u.brand_color,
     b.about !== undefined ? b.about : u.about,
+    JSON.stringify(b.holidays || JSON.parse(u.holidays || '[]')),
+    b.max_daily_meetings !== undefined ? (Number(b.max_daily_meetings) || 0) : (Number(u.max_daily_meetings) || 0),
     u.id
   );
   const updated = db.prepare('SELECT * FROM users WHERE id=?').get(u.id);
