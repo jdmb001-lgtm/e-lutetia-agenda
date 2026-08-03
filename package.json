@@ -1,0 +1,24 @@
+{
+  "name": "elutetia-agenda",
+  "version": "1.0.0",
+  "description": "Un clone auto-hébergeable de E-Lutetia Agenda : prise de rendez-vous, disponibilités, types d'événements et page de réservation publique.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "seed": "node server/seed.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2",
+    "luxon": "^3.5.0",
+    "nodemailer": "^6.9.15"
+  },
+  "license": "MIT"
+}

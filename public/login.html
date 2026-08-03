@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion — E-Lutetia Agenda</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <a class="brand" href="/" style="margin-bottom:22px;display:inline-flex;"><span class="logo-dot"></span> E-Lutetia <strong style="color:var(--blue)">Agenda</strong></a>
+      <div class="auth-switch">
+        <a href="/login" class="active">Connexion</a>
+        <a href="/signup">Inscription</a>
+      </div>
+      <h1>Bon retour !</h1>
+      <p class="sub">Connectez-vous pour gérer vos événements et réservations.</p>
+      <form id="login-form">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="email" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input type="password" id="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%;" id="submit-btn">Se connecter</button>
+        <div class="error-msg" id="error"></div>
+      </form>
+      <p class="foot">Compte démo : demo@example.com / demo1234</p>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+</body>
+</html>

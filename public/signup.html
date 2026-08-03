@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscription — E-Lutetia Agenda</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <a class="brand" href="/" style="margin-bottom:22px;display:inline-flex;"><span class="logo-dot"></span> E-Lutetia <strong style="color:var(--blue)">Agenda</strong></a>
+      <div class="auth-switch">
+        <a href="/login">Connexion</a>
+        <a href="/signup" class="active">Inscription</a>
+      </div>
+      <h1>Créez votre compte</h1>
+      <p class="sub">Gratuit et sans carte bancaire. Commencez en 30 secondes.</p>
+      <form id="signup-form">
+        <div class="field">
+          <label>Nom complet</label>
+          <input type="text" id="name" autocomplete="name" required>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="email" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label>Nom d'utilisateur</label>
+          <input type="text" id="username" autocomplete="username" placeholder="p.ex. marie" required>
+          <div class="hint">Votre page de réservation : <span id="url-preview" style="font-weight:600;color:var(--blue)">/</span></div>
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input type="password" id="password" autocomplete="new-password" required>
+          <div class="hint">8 caractères minimum.</div>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%;" id="submit-btn">Créer mon compte</button>
+        <div class="error-msg" id="error"></div>
+      </form>
+    </div>
+  </div>
+  <script>
+    // Aperçu de l'URL
+    const uInput = document.getElementById('username');
+    const preview = document.getElementById('url-preview');
+    uInput.addEventListener('input', () => {
+      const v = uInput.value.toLowerCase().replace(/[^a-z0-9-_]/g, '');
+      preview.textContent = '/' + (v || 'votre-nom') + '/votre-evenement';
+    });
+  </script>
+  <script src="/js/auth.js"></script>
+</body>
+</html>

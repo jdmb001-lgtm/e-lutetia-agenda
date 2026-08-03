@@ -1,0 +1,19 @@
+version: "3.8"
+services:
+  elutetia-agenda:
+    build: .
+    container_name: elutetia-agenda
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      # Décommentez pour activer l'envoi réel d'emails (sinon journal local) :
+      # - MAIL_SMTP_HOST=smtp.votrefournisseur.fr
+      # - MAIL_SMTP_PORT=587
+      # - MAIL_SMTP_USER=votre@email.fr
+      # - MAIL_SMTP_PASS=votre_mot_de_passe
+      # - MAIL_SMTP_SECURE=false
+      # - MAIL_FROM=no-reply@votredomaine.fr
+    volumes:
+      - ./data:/data

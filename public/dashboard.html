@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau de bord — E-Lutetia Agenda</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="dash">
+    <aside class="sidebar">
+      <a class="brand" href="/" style="padding:4px 6px;margin-bottom:18px;"><span class="logo-dot"></span> E-Lutetia <strong style="color:var(--blue)">Agenda</strong></a>
+      <nav class="nav">
+        <a href="#" data-tab="events" class="active"><span class="n-ico">🗓️</span> Types d'événements</a>
+        <a href="#" data-tab="bookings"><span class="n-ico">📥</span> Réservations</a>
+        <a href="#" data-tab="settings"><span class="n-ico">⚙️</span> Paramètres</a>
+      </nav>
+      <div class="spacer"></div>
+      <a class="btn btn-secondary btn-sm" href="#" id="share-link" style="margin:0 8px 10px;" target="_blank">🔗 Voir ma page</a>
+      <div class="user">
+        <div class="avatar" id="user-avatar"></div>
+        <div style="min-width:0;">
+          <div class="u-name" id="user-name"></div>
+          <div class="u-mail" id="user-email"></div>
+        </div>
+        <button style="background:none;border:none;color:var(--muted);font-size:18px;margin-left:auto;" id="logout-btn" title="Déconnexion">⎋</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="main-head">
+        <div class="crumb" id="crumb">Tableau de bord</div>
+        <h1 id="page-title">Types d'événements</h1>
+      </div>
+      <div class="content" id="content">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
