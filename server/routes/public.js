@@ -57,6 +57,34 @@ function getSingleLink(token) {
   `).get(token);
 }
 
+// ===========================================================================
+// Page publique d'une agence : infos + événements des membres
+// ===========================================================================
+router.get('/agency/:slug', (req, res) => {
+  const agency = db.prepare('SELECT * FROM agencies WHERE slug=?').get(req.params.slug);
+  if (!agency) return res.status(404).json({ error: 'Agence introuvable' });
+  const members = db.prepare('SELECT id, name, username, brand_color FROM users WHERE agency_id=? ORDER BY name ASC').all(agency.id);
+  const events = db.prepare(`
+    SELECT e.id, e.name, e.slug, e.duration, e.description, e.location_type, e.location_detail, e.color,
+           u.name AS host_name, u.username, u.brand_color AS host_brand_color
+    FROM event_types e JOIN users u ON u.id=e.user_id
+    WHERE u.agency_id=? AND e.is_active=1 ORDER BY e.name ASC
+  `).all(agency.id);
+  res.json({
+    id: agency.id, name: agency.name, slug: agency.slug,
+    description: agency.description || '', address: agency.address || '',
+    phone: agency.phone || '', email: agency.email || '',
+    brand_color: agency.brand_color || '#0069ff',
+    members: members.map((m) => ({ name: m.name, username: m.username })),
+    events: events.map((e) => ({
+      id: e.id, name: e.name, slug: e.slug, duration: e.duration, description: e.description,
+      location_type: e.location_type, location_detail: e.location_detail, color: e.color,
+      host_name: e.host_name,
+      url: `/${e.username}/${e.slug}`,
+    })),
+  });
+});
+
 router.get('/single/:token', (req, res) => {
   const link = getSingleLink(req.params.token);
   if (!link) return res.status(404).json({ error: 'Lien invalide' });

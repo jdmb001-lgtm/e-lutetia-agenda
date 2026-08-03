@@ -136,6 +136,12 @@ ensureColumn('users', 'agency_id', `agency_id INTEGER REFERENCES agencies(id) ON
 ensureColumn('users', 'holidays', `holidays TEXT NOT NULL DEFAULT '[]'`);
 ensureColumn('users', 'max_daily_meetings', `max_daily_meetings INTEGER NOT NULL DEFAULT 0`);
 
+ensureColumn('agencies', 'description', `description TEXT NOT NULL DEFAULT ''`);
+ensureColumn('agencies', 'address', `address TEXT NOT NULL DEFAULT ''`);
+ensureColumn('agencies', 'phone', `phone TEXT NOT NULL DEFAULT ''`);
+ensureColumn('agencies', 'email', `email TEXT NOT NULL DEFAULT ''`);
+ensureColumn('agencies', 'brand_color', `brand_color TEXT NOT NULL DEFAULT '#0069ff'`);
+
 // Le tout premier utilisateur créé devient automatiquement administrateur
 const firstUser = db.prepare('SELECT id FROM users ORDER BY id ASC LIMIT 1').get();
 if (firstUser) {

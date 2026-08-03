@@ -554,14 +554,15 @@ async function renderTeam() {
     const agencyCards = agencies.map((a) => `
       <div class="event-row" style="cursor:default;">
         <div class="left">
-          <div class="colorbar" style="background:#8b5cf6"></div>
+          <div class="colorbar" style="background:${esc(a.brand_color||'#8b5cf6')}"></div>
           <div>
             <div class="e-name">${esc(a.name)}</div>
-            <div class="e-meta">${a.members} membre(s) · ${esc('/' + a.slug)}</div>
+            <div class="e-meta">${a.members} membre(s) · <a href="${esc(a.landing_url)}" target="_blank" onclick="event.stopPropagation()">https://elutetia-agenda.fr${esc(a.landing_url)}</a></div>
           </div>
         </div>
         <div class="e-actions">
-          <button class="btn btn-secondary btn-sm" data-agency-edit="${a.id}">Renommer</button>
+          <button class="btn btn-secondary btn-sm" data-agency-view="${a.id}">Page</button>
+          <button class="btn btn-secondary btn-sm" data-agency-edit="${a.id}">Modifier</button>
           <button class="btn btn-danger btn-sm" data-agency-del="${a.id}">Supprimer</button>
         </div>
       </div>
@@ -604,6 +605,10 @@ async function renderTeam() {
     // Boutons
     $('#add-agency').addEventListener('click', addAgencyModal);
     $('#add-user').addEventListener('click', addUserModal);
+    $$('[data-agency-view]').forEach((b) => b.addEventListener('click', () => {
+      const a = teamState.agencies.find((x) => String(x.id) === String(b.dataset.agencyView));
+      if (a) window.open(a.landing_url, '_blank');
+    }));
     $$('[data-agency-edit]').forEach((b) => b.addEventListener('click', () => editAgencyModal(b.dataset.agencyEdit)));
     $$('[data-agency-del]').forEach((b) => b.addEventListener('click', () => delAgency(b.dataset.agencyDel)));
     $$('[data-user-edit]').forEach((b) => b.addEventListener('click', () => editUserModal(b.dataset.userEdit)));
@@ -649,9 +654,17 @@ function editAgencyModal(id) {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal">
-      <div class="modal-head"><h3>Renommer l'agence</h3><button class="close">×</button></div>
+      <div class="modal-head"><h3>Modifier l'agence</h3><button class="close">×</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nom</label><input type="text" id="ag-name" value="${esc(a.name)}"></div>
+        <div class="field"><label>Nom de l'agence</label><input type="text" id="ag-name" value="${esc(a.name)}"></div>
+        <div class="field"><label>Description</label><textarea id="ag-desc">${esc(a.description||'')}</textarea></div>
+        <div class="field"><label>Adresse</label><input type="text" id="ag-address" value="${esc(a.address||'')}" placeholder="ex. 12 avenue des Champs-Élysées, 75008 Paris"></div>
+        <div class="row-2">
+          <div class="field"><label>Téléphone</label><input type="text" id="ag-phone" value="${esc(a.phone||'')}"></div>
+          <div class="field"><label>Email</label><input type="text" id="ag-email" value="${esc(a.email||'')}"></div>
+        </div>
+        <div class="field"><label>Page publique</label>
+          <div class="hint"><a href="${esc(a.landing_url)}" target="_blank">https://elutetia-agenda.fr${esc(a.landing_url)}</a> — vos clients verront ceci.</div></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" data-act="cancel">Annuler</button>
@@ -661,11 +674,20 @@ function editAgencyModal(id) {
   document.body.appendChild(overlay);
   overlay.querySelector('.close').addEventListener('click', () => overlay.remove());
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   overlay.querySelector('[data-act="save"]').addEventListener('click', async () => {
     const name = $('#ag-name', overlay).value.trim();
     if (!name) return toast('Nom requis');
-    await api(`/api/admin/agencies/${id}`, { method: 'PUT', body: { name } });
-    overlay.remove(); toast('Agence renommée'); renderTeam();
+    try {
+      await api(`/api/admin/agencies/${id}`, { method: 'PUT', body: {
+        name,
+        description: $('#ag-desc', overlay).value,
+        address: $('#ag-address', overlay).value,
+        phone: $('#ag-phone', overlay).value,
+        email: $('#ag-email', overlay).value,
+      }});
+      overlay.remove(); toast('Agence mise à jour'); renderTeam();
+    } catch (e) { toast(e.message); }
   });
 }
 

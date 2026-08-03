@@ -48,6 +48,11 @@ for (const [route, file] of Object.entries(pages)) {
   app.get(route, (req, res) => res.sendFile(path.join(PUBLIC_DIR, file)));
 }
 
+// ===== Page d'agence : /:slug (page d'accueil d'une agence) =====
+app.get('/agency/:slug', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'agency.html'));
+});
+
 // ===== Lien à usage unique : /single/:token =====
 app.get('/single/:token', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'booking-single.html'));
@@ -56,6 +61,13 @@ app.get('/single/:token', (req, res) => {
 // ===== Sondage de réunion : /p/:slug =====
 app.get('/p/:slug', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'poll.html'));
+});
+
+// ===== Page d'accueil d'une agence : /:slug =====
+app.get('/:slug', (req, res, next) => {
+  const agency = db.prepare('SELECT id FROM agencies WHERE slug=?').get(req.params.slug);
+  if (!agency) return next();
+  res.sendFile(path.join(PUBLIC_DIR, 'agency.html'));
 });
 
 // ===== Page de réservation publique : /:username/:slug =====

@@ -42,7 +42,12 @@ router.get('/agencies', requireAdmin, (req, res) => {
     .prepare(`SELECT a.*, (SELECT COUNT(*) FROM users u WHERE u.agency_id = a.id) AS members
               FROM agencies a ORDER BY a.name ASC`)
     .all();
-  res.json(rows);
+  res.json(rows.map((a) => ({
+    id: a.id, name: a.name, slug: a.slug, members: a.members,
+    description: a.description || '', address: a.address || '', phone: a.phone || '',
+    email: a.email || '', brand_color: a.brand_color || '#0069ff',
+    landing_url: `/${a.slug}`,
+  })));
 });
 
 router.post('/agencies', requireAdmin, (req, res) => {
@@ -53,13 +58,24 @@ router.post('/agencies', requireAdmin, (req, res) => {
   let base = slug, n = 2;
   while (db.prepare('SELECT id FROM agencies WHERE slug=?').get(slug)) slug = `${base}-${n++}`;
   const info = db.prepare('INSERT INTO agencies (name, slug, created_at) VALUES (?,?,?)').run(name, slug, new Date().toISOString());
-  res.status(201).json({ id: info.lastInsertRowid, name, slug, members: 0 });
+  res.status(201).json({ id: info.lastInsertRowid, name, slug, members: 0, landing_url: `/${slug}` });
 });
 
 router.put('/agencies/:id', requireAdmin, (req, res) => {
-  const name = (req.body.name || '').trim();
+  const a = db.prepare('SELECT * FROM agencies WHERE id=?').get(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Agence introuvable' });
+  const b = req.body || {};
+  const name = (b.name || a.name).trim();
   if (!name) return res.status(400).json({ error: 'Nom requis' });
-  db.prepare('UPDATE agencies SET name=? WHERE id=?').run(name, req.params.id);
+  db.prepare('UPDATE agencies SET name=?, description=?, address=?, phone=?, email=?, brand_color=? WHERE id=?').run(
+    name,
+    b.description !== undefined ? b.description : a.description,
+    b.address !== undefined ? b.address : a.address,
+    b.phone !== undefined ? b.phone : a.phone,
+    b.email !== undefined ? b.email : a.email,
+    b.brand_color !== undefined ? b.brand_color : a.brand_color,
+    a.id
+  );
   res.json({ ok: true });
 });
 
