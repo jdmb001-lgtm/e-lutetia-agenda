@@ -74,6 +74,9 @@ function fmtTime(iso, tz) {
     $('#user-avatar').textContent = user.name.slice(0, 1).toUpperCase();
     $('#share-link').href = `/${user.username}`;
     document.documentElement.style.setProperty('--blue', user.brand_color || '#0069ff');
+    if (user.role === 'admin') {
+      $('#nav-team').classList.remove('hidden');
+    }
     bindNav();
     bindLogout();
     render();
@@ -101,11 +104,12 @@ function bindLogout() {
 
 // ============================ Router ============================
 function render() {
-  const titles = { events: 'Types d\'événements', bookings: 'Réservations', settings: 'Paramètres' };
+  const titles = { events: 'Types d\'événements', bookings: 'Réservations', settings: 'Paramètres', team: 'Équipe & Agences' };
   $('#page-title').textContent = titles[state.tab];
   $('#crumb').textContent = 'Tableau de bord';
   if (state.tab === 'events') renderEvents();
   else if (state.tab === 'bookings') renderBookings();
+  else if (state.tab === 'team') renderTeam();
   else renderSettings();
 }
 
@@ -509,4 +513,231 @@ function renderSettings() {
       toast('Mot de passe modifié');
     } catch (e) { err.textContent = e.message; }
   });
+}
+
+// ============================ Équipe & Agences (admin) ============================
+let teamState = { users: [], agencies: [] };
+
+async function renderTeam() {
+  if (state.user.role !== 'admin') {
+    $('#content').innerHTML = `<div class="card"><div class="empty"><h3>Accès réservé aux administrateurs</h3></div></div>`;
+    return;
+  }
+  const content = $('#content');
+  content.innerHTML = `<div class="spinner"></div>`;
+  try {
+    const [users, agencies] = await Promise.all([
+      api('/api/admin/users'),
+      api('/api/admin/agencies'),
+    ]);
+    teamState = { users, agencies };
+
+    const agencyCards = agencies.map((a) => `
+      <div class="event-row" style="cursor:default;">
+        <div class="left">
+          <div class="colorbar" style="background:#8b5cf6"></div>
+          <div>
+            <div class="e-name">${esc(a.name)}</div>
+            <div class="e-meta">${a.members} membre(s) · ${esc('/' + a.slug)}</div>
+          </div>
+        </div>
+        <div class="e-actions">
+          <button class="btn btn-secondary btn-sm" data-agency-edit="${a.id}">Renommer</button>
+          <button class="btn btn-danger btn-sm" data-agency-del="${a.id}">Supprimer</button>
+        </div>
+      </div>
+    `).join('');
+
+    const userRows = teamState.users.map((u) => `
+      <div class="event-row" style="cursor:default;">
+        <div class="left">
+          <div class="colorbar" style="background:${u.role === 'admin' ? '#f59e0b' : u.agency_name ? '#16a34a' : '#71717a'}"></div>
+          <div>
+            <div class="e-name">${esc(u.name)} ${u.role === 'admin' ? '<span class="badge badge-gray">Admin</span>' : '<span class="badge badge-green">Membre</span>'}</div>
+            <div class="e-meta">${esc(u.email)} · @${esc(u.username)} · ${esc(u.agency_name || 'Aucune agence')}</div>
+            <div class="e-meta">${u.events_count} événement(s) · ${u.bookings_count} réservation(s)</div>
+          </div>
+        </div>
+        <div class="e-actions">
+          <button class="btn btn-secondary btn-sm" data-user-edit="${u.id}">Modifier</button>
+          ${u.id !== state.user.id ? `<button class="btn btn-danger btn-sm" data-user-del="${u.id}">Supprimer</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    content.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:16px;">
+        <button class="btn btn-secondary" id="add-agency">+ Nouvelle agence</button>
+        <button class="btn btn-primary" id="add-user">+ Ajouter un membre</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Agences</h2></div>
+        ${agencies.length ? agencyCards : `<div class="empty"><h3>Aucune agence</h3><p>Créez vos agences (Paris, Nice...).</p></div>`}
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Membres</h2></div>
+        ${userRows}
+      </div>
+    `;
+
+    // Boutons
+    $('#add-agency').addEventListener('click', addAgencyModal);
+    $('#add-user').addEventListener('click', addUserModal);
+    $$('[data-agency-edit]').forEach((b) => b.addEventListener('click', () => editAgencyModal(b.dataset.agencyEdit)));
+    $$('[data-agency-del]').forEach((b) => b.addEventListener('click', () => delAgency(b.dataset.agencyDel)));
+    $$('[data-user-edit]').forEach((b) => b.addEventListener('click', () => editUserModal(b.dataset.userEdit)));
+    $$('[data-user-del]').forEach((b) => b.addEventListener('click', () => delUser(b.dataset.userDel)));
+  } catch (e) {
+    content.innerHTML = `<div class="card"><div class="error-msg" style="padding:20px">${esc(e.message)}</div></div>`;
+  }
+}
+
+function agencySelectOptions(selected) {
+  return teamState.agencies.map((a) => `<option value="${a.id}" ${Number(selected) === Number(a.id) ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+}
+
+function addAgencyModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head"><h3>Nouvelle agence</h3><button class="close">×</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nom de l'agence</label><input type="text" id="ag-name" placeholder="ex. E-Lutetia Paris"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" data-act="cancel">Annuler</button>
+        <button class="btn btn-primary" data-act="save">Créer l'agence</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.close').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('[data-act="save"]').addEventListener('click', async () => {
+    const name = $('#ag-name', overlay).value.trim();
+    if (!name) return toast('Nom requis');
+    await api('/api/admin/agencies', { method: 'POST', body: { name } });
+    overlay.remove(); toast('Agence créée'); renderTeam();
+  });
+}
+
+function editAgencyModal(id) {
+  const a = teamState.agencies.find((x) => String(x.id) === String(id));
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head"><h3>Renommer l'agence</h3><button class="close">×</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nom</label><input type="text" id="ag-name" value="${esc(a.name)}"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" data-act="cancel">Annuler</button>
+        <button class="btn btn-primary" data-act="save">Enregistrer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.close').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('[data-act="save"]').addEventListener('click', async () => {
+    const name = $('#ag-name', overlay).value.trim();
+    if (!name) return toast('Nom requis');
+    await api(`/api/admin/agencies/${id}`, { method: 'PUT', body: { name } });
+    overlay.remove(); toast('Agence renommée'); renderTeam();
+  });
+}
+
+async function delAgency(id) {
+  const a = teamState.agencies.find((x) => String(x.id) === String(id));
+  if (!confirm(`Supprimer l'agence « ${a.name} » ? Les membres ne seront plus rattachés.`)) return;
+  await api(`/api/admin/agencies/${id}`, { method: 'DELETE' });
+  toast('Agence supprimée'); renderTeam();
+}
+
+function addUserModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head"><h3>Ajouter un membre</h3><button class="close">×</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nom complet</label><input type="text" id="u-name"></div>
+        <div class="field"><label>Email</label><input type="email" id="u-email"></div>
+        <div class="field"><label>Mot de passe (8 caractères min.)</label><input type="text" id="u-pass"></div>
+        <div class="field"><label>Agence</label><select id="u-agency"><option value="">Aucune</option>${agencySelectOptions()}</select></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" data-act="cancel">Annuler</button>
+        <button class="btn btn-primary" data-act="save">Créer le compte</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.close').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('[data-act="save"]').addEventListener('click', async () => {
+    const name = $('#u-name', overlay).value.trim();
+    const email = $('#u-email', overlay).value.trim();
+    const password = $('#u-pass', overlay).value;
+    const agency_id = $('#u-agency', overlay).value;
+    if (!name || !email || !password) return toast('Nom, email et mot de passe requis');
+    try {
+      await api('/api/admin/users', { method: 'POST', body: { name, email, password, agency_id: agency_id || null } });
+      overlay.remove(); toast('Compte créé'); renderTeam();
+    } catch (e) { toast(e.message); }
+  });
+}
+
+function editUserModal(id) {
+  const u = teamState.users.find((x) => String(x.id) === String(id));
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head"><h3>Modifier ${esc(u.name)}</h3><button class="close">×</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nom</label><input type="text" id="u-name" value="${esc(u.name)}"></div>
+        <div class="field"><label>Agence</label><select id="u-agency"><option value="">Aucune</option>${agencySelectOptions(u.agency_id)}</select></div>
+        <div class="field"><label>Rôle</label>
+          <select id="u-role">
+            <option value="user" ${u.role === 'user' ? 'selected' : ''}>Membre</option>
+            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrateur</option>
+          </select>
+        </div>
+        <div class="field"><label>Nouveau mot de passe (laisser vide pour ne pas changer)</label><input type="text" id="u-pass" placeholder="min. 8 caractères"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" data-act="cancel">Annuler</button>
+        <button class="btn btn-primary" data-act="save">Enregistrer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.close').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('[data-act="save"]').addEventListener('click', async () => {
+    const body = {
+      name: $('#u-name', overlay).value.trim(),
+      agency_id: $('#u-agency', overlay).value || null,
+      role: $('#u-role', overlay).value,
+    };
+    const pw = $('#u-pass', overlay).value;
+    if (pw) body.password = pw;
+    try {
+      await api(`/api/admin/users/${id}`, { method: 'PUT', body });
+      overlay.remove(); toast('Modifications enregistrées'); renderTeam();
+    } catch (e) { toast(e.message); }
+  });
+}
+
+async function delUser(id) {
+  const u = teamState.users.find((x) => String(x.id) === String(id));
+  if (!confirm(`Supprimer le compte de « ${u.name} » et toutes ses données ?`)) return;
+  try {
+    await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    toast('Compte supprimé'); renderTeam();
+  } catch (e) { toast(e.message); }
 }

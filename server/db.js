@@ -75,6 +75,34 @@ CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_time ON bookings(start_time);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS agencies (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  slug       TEXT UNIQUE NOT NULL,
+  created_at TEXT NOT NULL
+);
 `);
+
+// ---------------------------------------------------------------------------
+// Migrations : ajoute les colonnes si elles n'existent pas encore
+// ---------------------------------------------------------------------------
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+ensureColumn('users', 'role', `role TEXT NOT NULL DEFAULT 'user'`);
+ensureColumn('users', 'agency_id', `agency_id INTEGER REFERENCES agencies(id) ON DELETE SET NULL`);
+
+// Le tout premier utilisateur créé devient automatiquement administrateur
+const firstUser = db.prepare('SELECT id FROM users ORDER BY id ASC LIMIT 1').get();
+if (firstUser) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM users').get();
+  if (count.n === 1) {
+    db.prepare('UPDATE users SET role=? WHERE id=?').run('admin', firstUser.id);
+  }
+}
 
 module.exports = db;

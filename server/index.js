@@ -7,6 +7,7 @@ const { router: authRouter } = require('./routes/auth');
 const eventsRouter = require('./routes/events');
 const bookingsRouter = require('./routes/bookings');
 const settingsRouter = require('./routes/settings');
+const adminRouter = require('./routes/admin');
 const publicRouter = require('./routes/public');
 const { startScheduler } = require('./lib/workflows');
 
@@ -23,6 +24,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/public', publicRouter);
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));

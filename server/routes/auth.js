@@ -21,6 +21,8 @@ function publicUser(u) {
     timezone: u.timezone,
     brand_color: u.brand_color,
     about: u.about,
+    role: u.role || 'user',
+    agency_id: u.agency_id || null,
   };
 }
 
