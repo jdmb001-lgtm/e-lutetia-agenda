@@ -39,14 +39,17 @@ router.put('/password', (req, res) => {
     return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 8 caractères' });
   }
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  // Si un mot de passe actuel est fourni, on le vérifie (mais ce n'est pas obligatoire
+  // pour un utilisateur déjà connecté). Erreur en 400 (et non 401) pour ne pas
+  // déconnecter l'utilisateur.
   if (current_password && !bcrypt.compareSync(current_password, user.password_hash)) {
-    return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    return res.status(400).json({ error: 'Mot de passe actuel incorrect' });
   }
   const hash = bcrypt.hashSync(new_password, 10);
   db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, req.user.id);
-  // Invalider les autres sessions
+  // Garder la session courante, invalider les autres
   db.prepare('DELETE FROM sessions WHERE user_id=? AND token != ?').run(req.user.id, req.sessionToken);
-  res.json({ ok: true });
+  res.json({ ok: true, message: 'Mot de passe modifié avec succès' });
 });
 
 module.exports = router;

@@ -505,13 +505,28 @@ function renderSettings() {
   $('#p-save').addEventListener('click', async () => {
     const err = $('#p-err');
     err.textContent = '';
+    err.className = 'error-msg';
+    const btn = $('#p-save');
+    const pw = $('#p-new').value;
+    if (!pw || pw.length < 8) {
+      err.textContent = 'Le nouveau mot de passe doit contenir au moins 8 caractères.';
+      return;
+    }
+    btn.disabled = true;
     try {
-      await api('/api/settings/password', { method: 'PUT', body: {
-        current_password: $('#p-current').value, new_password: $('#p-new').value,
+      const data = await api('/api/settings/password', { method: 'PUT', body: {
+        current_password: $('#p-current').value, new_password: pw,
       }});
       $('#p-current').value = ''; $('#p-new').value = '';
-      toast('Mot de passe modifié');
-    } catch (e) { err.textContent = e.message; }
+      err.className = 'success-msg';
+      err.textContent = data.message || 'Mot de passe modifié avec succès !';
+      toast(data.message || 'Mot de passe modifié');
+    } catch (e) {
+      err.textContent = e.message || 'Erreur lors du changement de mot de passe.';
+      toast(e.message || 'Erreur');
+    } finally {
+      btn.disabled = false;
+    }
   });
 }
 
