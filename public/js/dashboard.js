@@ -183,7 +183,8 @@ function openEventModal(existing) {
   const isEdit = !!existing;
   const e = existing || {
     name: '', slug: '', description: '', duration: 30, slot_interval: 0,
-    location_type: 'video', location_detail: '', color: state.user.brand_color,
+    location_type: 'video', location_detail: '', address: '', organizer: state.user.name,
+    color: state.user.brand_color,
     buffer_before: 0, buffer_after: 0, daily_limit: 0, min_notice_minutes: 0,
     is_active: true, availability: {},
   };
@@ -237,6 +238,18 @@ function openEventModal(existing) {
             <input type="text" id="ev-locdetail" value="${esc(e.location_detail)}" placeholder="p.ex. Lien envoyé par email">
           </div>
         </div>
+        <div class="field">
+          <label>Adresse du lieu de rendez-vous</label>
+          <input type="text" id="ev-address" value="${esc(e.address)}" placeholder="ex. 12 avenue des Champs-Élysées, 75008 Paris">
+          <div class="hint">Affiché au client au moment de la réservation (utile pour les RDV en personne).</div>
+        </div>
+        <div class="field">
+          <label>Organisateur</label>
+          <select id="ev-organizer">
+            <option value="${esc(e.organizer)}">${esc(e.organizer || state.user.name)}</option>
+          </select>
+          <div class="hint" id="ev-organizer-hint">Chargement des organisateurs…</div>
+        </div>
         <div class="row-2">
           <div class="field">
             <label>Tampon avant (min)</label>
@@ -272,6 +285,12 @@ function openEventModal(existing) {
         </div>
 
         <hr style="border:none;border-top:1px solid var(--border);margin:8px 0 18px;">
+        <h3 style="font-size:16px;margin-bottom:4px;">Questions pour l'invité (champs personnalisés)</h3>
+        <p class="hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;">Ajoutez des questions à poser à l'invité lors de la réservation (ex. Carte VTC, Numéro de téléphone...).</p>
+        <div id="cf-editor"></div>
+        <button class="btn btn-secondary btn-sm" id="cf-add" type="button" style="margin-top:8px;">+ Ajouter une question</button>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:18px 0 18px;">
         <h3 style="font-size:16px;margin-bottom:4px;">Disponibilités hebdomadaires</h3>
         <p class="hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;">Définissez les horaires où vous êtes disponible. Décochez un jour pour le rendre indisponible.</p>
         <div id="avail-editor"></div>
@@ -284,12 +303,65 @@ function openEventModal(existing) {
   `;
   document.body.appendChild(overlay);
 
+  // Organisateurs (moi + collègues de la même agence)
+  (async () => {
+    try {
+      const orgs = await api('/api/events/organizers');
+      const sel = $('#ev-organizer', overlay);
+      const current = e.organizer || state.user.name;
+      sel.innerHTML = orgs.map((o) => `<option value="${esc(o.name)}" ${o.name === current ? 'selected' : ''}>${esc(o.name)}${o.name === state.user.name ? ' (vous)' : ''}</option>`).join('');
+      if (!$('#ev-organizer', overlay).value) { sel.innerHTML += `<option value="${esc(current)}" selected>${esc(current)}</option>`; }
+      $('#ev-organizer-hint', overlay).textContent = 'La personne qui organise et anime ce rendez-vous.';
+    } catch (_) {}
+  })();
+
   // Couleurs
   $$('#ev-colors .c', overlay).forEach((c) => c.addEventListener('click', () => {
     $$('#ev-colors .c', overlay).forEach((x) => x.classList.remove('selected'));
     c.classList.add('selected');
     $('#ev-color', overlay).value = c.dataset.c;
   }));
+
+  // Éditeur de champs personnalisés
+  let customFields = (e.custom_fields || []).map((f) => ({ ...f }));
+  const cfEditor = $('#cf-editor', overlay);
+  function renderCustomFields() {
+    cfEditor.innerHTML = customFields.map((f, i) => `
+      <div class="avail-day" style="align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;">
+          <input type="text" class="cf-label" value="${esc(f.label)}" placeholder="Libellé (ex. Carte VTC)" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+          <div style="display:flex;gap:6px;">
+            <select class="cf-type" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;">
+              <option value="text" ${f.type==='text'?'selected':''}>Texte</option>
+              <option value="select" ${f.type==='select'?'selected':''}>Liste (choix)</option>
+              <option value="tel" ${f.type==='tel'?'selected':''}>Téléphone</option>
+              <option value="number" ${f.type==='number'?'selected':''}>Nombre</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap;">
+              <input type="checkbox" class="cf-req" ${f.required?'checked':''}> Requis
+            </label>
+          </div>
+          ${f.type==='select' ? `<input type="text" class="cf-options" value="${esc((f.options||[]).join(', '))}" placeholder="Options séparées par des virgules" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:6px;font-size:13px;">` : ''}
+        </div>
+        <button class="rm cf-del" type="button" style="margin-top:4px;">&times;</button>
+      </div>
+    `).join('');
+    cfEditor.querySelectorAll('.cf-type').forEach((sel, i) => {
+      sel.addEventListener('change', () => {
+        customFields[i].type = sel.value;
+        renderCustomFields();
+      });
+    });
+    cfEditor.querySelectorAll('.cf-label').forEach((inp, i) => inp.addEventListener('input', () => customFields[i].label = inp.value));
+    cfEditor.querySelectorAll('.cf-req').forEach((cb, i) => cb.addEventListener('change', () => customFields[i].required = cb.checked));
+    cfEditor.querySelectorAll('.cf-options').forEach((inp, i) => inp.addEventListener('input', () => customFields[i].options = inp.value.split(',').map(s=>s.trim()).filter(Boolean)));
+    cfEditor.querySelectorAll('.cf-del').forEach((btn, i) => btn.addEventListener('click', () => { customFields.splice(i, 1); renderCustomFields(); }));
+  }
+  renderCustomFields();
+  $('#cf-add', overlay).addEventListener('click', () => {
+    customFields.push({ label: '', type: 'text', required: true, options: [] });
+    renderCustomFields();
+  });
 
   // Éditeur de disponibilités
   const editor = $('#avail-editor', overlay);
@@ -354,12 +426,15 @@ function openEventModal(existing) {
       description: $('#ev-desc', overlay).value.trim(),
       location_type: $('#ev-loc', overlay).value,
       location_detail: $('#ev-locdetail', overlay).value.trim(),
+      address: $('#ev-address', overlay).value.trim(),
+      organizer: $('#ev-organizer', overlay).value || state.user.name,
       buffer_before: parseInt($('#ev-bufferbefore', overlay).value, 10) || 0,
       buffer_after: parseInt($('#ev-bufferafter', overlay).value, 10) || 0,
       daily_limit: parseInt($('#ev-limit', overlay).value, 10) || 0,
       min_notice_minutes: parseInt($('#ev-notice', overlay).value, 10) || 0,
       color: $('#ev-color', overlay).value,
       is_active: $('#ev-active', overlay).checked,
+      custom_fields: customFields.filter((f) => f.label && f.label.trim()),
       availability,
     };
     if (!payload.name) return toast('Le nom est requis');
@@ -420,6 +495,7 @@ async function loadBookings() {
               <div class="b-name">${esc(b.invitee_name)} <span class="badge ${isCancelled ? 'badge-red' : b.start_time > new Date().toISOString() ? 'badge-green' : 'badge-gray'}" style="margin-left:4px;">${isCancelled ? 'Annulé' : b.start_time > new Date().toISOString() ? 'Confirmé' : 'Passé'}</span></div>
               <div class="b-time">${fmtDate(b.start_time, tz)} · ${fmtTime(b.start_time, tz)}–${fmtTime(b.end_time, tz)}</div>
               <div class="b-time">${esc(b.event.name)} · ${b.invitee_email}${b.invitee_notes ? ' · « ' + esc(b.invitee_notes) + ' »' : ''}</div>
+              ${b.custom_answers && Object.keys(b.custom_answers).length ? `<div class="b-time" style="color:var(--blue);">` + Object.entries(b.custom_answers).map(([k,v])=>esc(k)+': '+esc(v)).join(' · ') + `</div>` : ''}
             </div>
           </div>
           ${!isCancelled && b.start_time > new Date().toISOString() ? `<button class="btn btn-danger btn-sm" data-cancel="${b.id}">Annuler</button>` : ''}

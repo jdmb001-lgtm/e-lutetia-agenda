@@ -32,6 +32,9 @@ function publicEvent(e) {
     duration: e.duration,
     location_type: e.location_type,
     location_detail: e.location_detail,
+    address: e.address || '',
+    organizer: e.organizer || '',
+    custom_fields: (() => { try { return JSON.parse(e.custom_fields || '[]'); } catch (_) { return []; } })(),
     color: e.color || e.host_brand_color,
     booking_url: `/${e.username}/${e.slug}`,
     host: {
@@ -219,7 +222,7 @@ router.post('/:username/:slug/book', async (req, res) => {
   const e = getEventBySlug(req.params.username, req.params.slug);
   if (!e || !e.is_active) return res.status(404).json({ error: 'Événement introuvable' });
 
-  const { name, email, notes, start, timezone } = req.body || {};
+  const { name, email, notes, start, timezone, custom_answers } = req.body || {};
   if (!name || !email) return res.status(400).json({ error: 'Nom et email requis' });
   if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Email invalide' });
   if (!start) return res.status(400).json({ error: 'Créneau requis' });
@@ -233,15 +236,19 @@ router.post('/:username/:slug/book', async (req, res) => {
   const event = e; // event_type row + host fields
   const endIso = new Date(new Date(start).getTime() + event.duration * 60000).toISOString();
 
+  const answers = {};
+  try { Object.assign(answers, custom_answers || {}); } catch (_) {}
+
   const info = db
     .prepare(
       `INSERT INTO bookings (event_type_id, user_id, invitee_name, invitee_email, invitee_notes,
-         invitee_timezone, start_time, end_time, status, created_at)
-       VALUES (?,?,?,?,?,?,?,?,'confirmed',?)`
+         invitee_timezone, start_time, end_time, status, created_at, custom_answers)
+       VALUES (?,?,?,?,?,?,?,?,'confirmed',?,?)`
     )
     .run(
       event.id, event.user_id, name.trim(), email.trim(), (notes || '').trim(),
-      timezone || 'UTC', new Date(start).toISOString(), endIso, new Date().toISOString()
+      timezone || 'UTC', new Date(start).toISOString(), endIso, new Date().toISOString(),
+      JSON.stringify(answers)
     );
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(info.lastInsertRowid);
@@ -252,15 +259,21 @@ router.post('/:username/:slug/book', async (req, res) => {
   const startLocal = DateTime.fromISO(start, { zone: 'utc' }).setZone(tz);
   const fmt = startLocal.toFormat('cccc d MMMM yyyy, HH:mm (z)');
 
+  // Récapitulatif des réponses personnalisées
+  let customText = '';
+  if (Object.keys(answers).length) {
+    customText = '\n' + Object.entries(answers).map(([k, v]) => `${k} : ${v || '-'}`).join('\n') + '\n';
+  }
+
   await sendMail({
     to: event.host_email,
     subject: `Nouvelle réservation : ${event.name} avec ${name.trim()}`,
-    text: `Bonjour ${event.host_name},\n\n${name.trim()} (${email.trim()}) a réservé un rendez-vous "${event.name}".\n\n📅 ${fmt}\n⏱ ${event.duration} min\n📝 ${notes ? notes.trim() : '-'}\n\nMerci d'utiliser votre application de planification.`,
+    text: `Bonjour ${event.host_name},\n\n${name.trim()} (${email.trim()}) a réservé un rendez-vous "${event.name}".\n\n📅 ${fmt}\n⏱ ${event.duration} min\n📝 ${notes ? notes.trim() : '-'}${customText}\n\nMerci d'utiliser votre application de planification.`,
   });
   await sendMail({
     to: email.trim(),
-    subject: `Confirmation : ${event.name} avec ${event.host_name}`,
-    text: `Bonjour ${name.trim()},\n\nVotre rendez-vous "${event.name}" avec ${event.host_name} est confirmé.\n\n📅 ${fmt}\n⏱ ${event.duration} min\n📍 ${event.location_detail || event.location_type}\n\nAjoutez-le à votre agenda. À bientôt !`,
+    subject: `Confirmation : ${event.name} avec ${event.organizer || event.host_name}`,
+    text: `Bonjour ${name.trim()},\n\nVotre rendez-vous "${event.name}" avec ${event.organizer || event.host_name} est confirmé.\n\n📅 ${fmt}\n⏱ ${event.duration} min\n📍 ${event.address || event.location_detail || event.location_type}\n\nAjoutez-le à votre agenda. À bientôt !`,
   });
 
   res.status(201).json({
@@ -273,6 +286,7 @@ router.post('/:username/:slug/book', async (req, res) => {
       invitee_name: booking.invitee_name,
       location_detail: event.location_detail,
       location_type: event.location_type,
+      address: event.address,
     },
   });
 });

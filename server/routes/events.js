@@ -39,6 +39,9 @@ function serializeEvent(e) {
     slot_interval: e.slot_interval,
     location_type: e.location_type,
     location_detail: e.location_detail,
+    address: e.address || '',
+    organizer: e.organizer || '',
+    custom_fields: (() => { try { return JSON.parse(e.custom_fields || '[]'); } catch (_) { return []; } })(),
     color: e.color,
     buffer_before: e.buffer_before,
     buffer_after: e.buffer_after,
@@ -59,6 +62,16 @@ router.get('/', (req, res) => {
     )
     .all(req.user.id);
   res.json(rows.map(serializeEvent));
+});
+
+// Liste des organisateurs possibles (moi + collègues de ma même agence)
+router.get('/organizers', (req, res) => {
+  const rows = db.prepare(`
+    SELECT id, name, username, agency_id FROM users
+    WHERE id=? OR (agency_id IS NOT NULL AND agency_id=(SELECT agency_id FROM users WHERE id=?))
+    ORDER BY name ASC
+  `).all(req.user.id, req.user.id);
+  res.json(rows.map((u) => ({ id: u.id, name: u.name, username: u.username, agency_id: u.agency_id })));
 });
 
 // Détail
@@ -95,13 +108,15 @@ router.post('/', (req, res) => {
     .prepare(
       `INSERT INTO event_types
         (user_id, name, slug, description, duration, slot_interval, location_type, location_detail,
-         color, buffer_before, buffer_after, daily_limit, min_notice_minutes, is_active, availability, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         address, organizer, custom_fields, color, buffer_before, buffer_after, daily_limit, min_notice_minutes, is_active, availability, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       req.user.id, name, slug, b.description || '', duration,
       parseInt(b.slot_interval, 10) || 0,
       b.location_type || 'video', b.location_detail || '',
+      b.address || '', b.organizer || '',
+      JSON.stringify(b.custom_fields || []),
       color,
       parseInt(b.buffer_before, 10) || 0, parseInt(b.buffer_after, 10) || 0,
       parseInt(b.daily_limit, 10) || 0, parseInt(b.min_notice_minutes, 10) || 0,
@@ -129,7 +144,7 @@ router.put('/:id', (req, res) => {
   db.prepare(
     `UPDATE event_types SET
        name=?, description=?, duration=?, slot_interval=?, location_type=?, location_detail=?,
-       color=?, buffer_before=?, buffer_after=?, daily_limit=?, min_notice_minutes=?,
+       address=?, organizer=?, custom_fields=?, color=?, buffer_before=?, buffer_after=?, daily_limit=?, min_notice_minutes=?,
        is_active=?, availability=?
      WHERE id=?`
   ).run(
@@ -139,6 +154,9 @@ router.put('/:id', (req, res) => {
     b.slot_interval !== undefined ? (parseInt(b.slot_interval, 10) || 0) : existing.slot_interval,
     b.location_type !== undefined ? b.location_type : existing.location_type,
     b.location_detail !== undefined ? b.location_detail : existing.location_detail,
+    b.address !== undefined ? b.address : existing.address,
+    b.organizer !== undefined ? b.organizer : existing.organizer,
+    b.custom_fields !== undefined ? JSON.stringify(b.custom_fields || []) : existing.custom_fields,
     b.color !== undefined ? b.color : existing.color,
     b.buffer_before !== undefined ? (parseInt(b.buffer_before, 10) || 0) : existing.buffer_before,
     b.buffer_after !== undefined ? (parseInt(b.buffer_after, 10) || 0) : existing.buffer_after,

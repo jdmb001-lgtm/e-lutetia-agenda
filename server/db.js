@@ -136,6 +136,11 @@ ensureColumn('users', 'agency_id', `agency_id INTEGER REFERENCES agencies(id) ON
 ensureColumn('users', 'holidays', `holidays TEXT NOT NULL DEFAULT '[]'`);
 ensureColumn('users', 'max_daily_meetings', `max_daily_meetings INTEGER NOT NULL DEFAULT 0`);
 
+ensureColumn('event_types', 'address', `address TEXT NOT NULL DEFAULT ''`);
+ensureColumn('event_types', 'organizer', `organizer TEXT NOT NULL DEFAULT ''`);
+ensureColumn('event_types', 'custom_fields', `custom_fields TEXT NOT NULL DEFAULT '[]'`);
+ensureColumn('bookings', 'custom_answers', `custom_answers TEXT NOT NULL DEFAULT '{}'`);
+
 ensureColumn('agencies', 'description', `description TEXT NOT NULL DEFAULT ''`);
 ensureColumn('agencies', 'address', `address TEXT NOT NULL DEFAULT ''`);
 ensureColumn('agencies', 'phone', `phone TEXT NOT NULL DEFAULT ''`);

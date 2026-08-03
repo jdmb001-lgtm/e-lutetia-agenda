@@ -11,6 +11,7 @@ function serializeBooking(b) {
     invitee_name: b.invitee_name,
     invitee_email: b.invitee_email,
     invitee_notes: b.invitee_notes,
+    custom_answers: (() => { try { return JSON.parse(b.custom_answers || '{}'); } catch (_) { return {}; } })(),
     invitee_timezone: b.invitee_timezone,
     start_time: b.start_time,
     end_time: b.end_time,

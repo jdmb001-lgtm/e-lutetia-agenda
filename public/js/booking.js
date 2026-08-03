@@ -86,11 +86,12 @@ function renderShell() {
       <div>
         <div class="bk-host-avatar" style="background:${e.color || '#0069ff'}">${hostInitial}</div>
         <h1>${escapeHtml(e.name)}</h1>
-        <div class="bk-host">avec ${escapeHtml(e.host.name)}</div>
+        <div class="bk-host">avec ${escapeHtml(e.organizer || e.host.name)}</div>
         ${e.description ? `<div class="bk-desc">${escapeHtml(e.description)}</div>` : ''}
         <div class="bk-meta">
           <div><span class="m-ico">⏱️</span> ${e.duration} min</div>
           <div><span class="m-ico">📍</span> ${escapeHtml(locLabel(e.location_type))}${e.location_detail ? ' · ' + escapeHtml(e.location_detail) : ''}</div>
+          ${e.address ? `<div><span class="m-ico">🏢</span> ${escapeHtml(e.address)}</div>` : ''}
           <div><span class="m-ico">🕒</span> Fuseau : ${escapeHtml(e.host.timezone)}</div>
         </div>
       </div>
@@ -215,6 +216,7 @@ function renderStep(step) {
           <input type="text" id="invitee-name" required>
           <label>Votre email *</label>
           <input type="email" id="invitee-email" required>
+          <div id="custom-fields"></div>
           <label>Notes (facultatif)</label>
           <textarea id="invitee-notes" rows="3"></textarea>
           <div class="tz-note">🌍 Les horaires sont affichés dans votre fuseau : ${TZ}</div>
@@ -229,6 +231,7 @@ function renderStep(step) {
     $('#back-step2').addEventListener('click', () => renderStep(2));
     $('#confirm-btn').addEventListener('click', confirmBooking);
     $('#bk-form').addEventListener('submit', (e) => { e.preventDefault(); confirmBooking(); });
+    renderCustomFields();
   } else if (step === 4) {
     right.innerHTML = `
       <div class="bk-success">
@@ -254,6 +257,24 @@ function isMonthPast() {
   return S.viewYear < now.getFullYear() || (S.viewYear === now.getFullYear() && S.viewMonth < now.getMonth() + 1);
 }
 
+function renderCustomFields() {
+  const box = $('#custom-fields');
+  if (!box) return;
+  const fields = S.event.custom_fields || [];
+  box.innerHTML = fields.map((f, i) => {
+    const req = f.required ? ' *' : '';
+    const id = `cf-${i}`;
+    let input = '';
+    if (f.type === 'select') {
+      const opts = (f.options || []).map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+      input = `<select id="${id}" ${f.required ? 'required' : ''}><option value="">Sélectionnez...</option>${opts}</select>`;
+    } else {
+      input = `<input type="${f.type || 'text'}" id="${id}" ${f.required ? 'required' : ''}>`;
+    }
+    return `<label for="${id}">${escapeHtml(f.label)}${req}</label>${input}`;
+  }).join('');
+}
+
 async function confirmBooking() {
   const name = $('#invitee-name').value.trim();
   const email = $('#invitee-email').value.trim();
@@ -262,12 +283,19 @@ async function confirmBooking() {
   err.textContent = '';
   if (!name || !email) { err.textContent = 'Veuillez renseigner votre nom et votre email.'; return; }
 
+  // Récupérer les réponses aux champs personnalisés
+  const custom_answers = {};
+  (S.event.custom_fields || []).forEach((f, i) => {
+    const el = document.getElementById(`cf-${i}`);
+    if (el) custom_answers[f.label] = el.value.trim();
+  });
+
   const btn = $('#confirm-btn');
   btn.disabled = true; btn.textContent = 'Réservation en cours…';
   const path = location.pathname.split('/').filter(Boolean);
   try {
     const { booking } = await api(`/api/public/${path[0]}/${path[1]}/book`, { method: 'POST', body: {
-      name, email, notes, start: S.selectedSlot, timezone: TZ,
+      name, email, notes, start: S.selectedSlot, timezone: TZ, custom_answers,
     }});
     S.inviteeEmail = email;
     renderStep(4);
