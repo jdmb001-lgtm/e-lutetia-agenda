@@ -154,6 +154,27 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Réglages globaux du site (inscriptions, logo, nom)
+// ---------------------------------------------------------------------------
+router.get('/site-settings', requireAdmin, (req, res) => {
+  const { getSetting } = require('../lib/siteSettings');
+  res.json({
+    registration_enabled: getSetting('registration_enabled', 'true') !== 'false',
+    logo: getSetting('logo', ''),
+    site_name: getSetting('site_name', 'E-Lutetia Agenda'),
+  });
+});
+
+router.put('/site-settings', requireAdmin, (req, res) => {
+  const { setSetting } = require('../lib/siteSettings');
+  const b = req.body || {};
+  if (b.registration_enabled !== undefined) setSetting('registration_enabled', b.registration_enabled ? 'true' : 'false');
+  if (b.logo !== undefined) setSetting('logo', b.logo);
+  if (b.site_name !== undefined) setSetting('site_name', b.site_name);
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
 // Promotion du premier utilisateur en admin (aide de secours si besoin)
 // ---------------------------------------------------------------------------
 router.post('/make-admin', requireAuth, (req, res) => {

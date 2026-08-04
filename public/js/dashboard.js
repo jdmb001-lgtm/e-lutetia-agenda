@@ -525,14 +525,41 @@ function renderSettings() {
   const content = $('#content');
   content.innerHTML = `
     <div class="card">
-      <div class="card-head"><h2>Profil & page publique</h2></div>
+      <div class="card-head"><h2>Mon profil</h2></div>
       <div class="card-body">
         <div class="field"><label>Nom complet</label><input type="text" id="s-name" value="${esc(u.name)}"></div>
         <div class="field"><label>Nom d'utilisateur</label><input type="text" id="s-username" value="${esc(u.username)}">
           <div class="hint">Votre page : <a id="s-preview" href="/${esc(u.username)}" target="_blank">/${esc(u.username)}</a></div></div>
+        <div class="field"><label>Message de bienvenue</label>
+          <textarea id="s-welcome" placeholder="ex. Bienvenue ! Choisissez un créneau pour votre rendez-vous.">${esc(u.welcome_message || '')}</textarea>
+          <div class="hint">Affiché en haut de votre page de réservation.</div></div>
+        <div class="row-2">
+          <div class="field"><label>Langue</label>
+            <select id="s-language">
+              <option value="fr" ${u.language==='fr'?'selected':''}>Français</option>
+              <option value="en" ${u.language==='en'?'selected':''}>English</option>
+              <option value="es" ${u.language==='es'?'selected':''}>Español</option>
+              <option value="it" ${u.language==='it'?'selected':''}>Italiano</option>
+            </select></div>
+          <div class="field"><label>Pays</label>
+            <input type="text" id="s-country" value="${esc(u.country || 'France')}"></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label>Format de la date</label>
+            <select id="s-dateformat">
+              <option value="DD/MM/YYYY" ${u.date_format==='DD/MM/YYYY'?'selected':''}>DD/MM/YYYY</option>
+              <option value="MM/DD/YYYY" ${u.date_format==='MM/DD/YYYY'?'selected':''}>MM/DD/YYYY</option>
+              <option value="YYYY-MM-DD" ${u.date_format==='YYYY-MM-DD'?'selected':''}>YYYY-MM-DD</option>
+            </select></div>
+          <div class="field"><label>Format de l'heure</label>
+            <select id="s-timeformat">
+              <option value="24h" ${u.time_format==='24h'?'selected':''}>24h</option>
+              <option value="12h" ${u.time_format==='12h'?'selected':''}>12h (AM/PM)</option>
+            </select></div>
+        </div>
         <div class="field"><label>Fuseau horaire</label>
-          <select id="s-tz">${TIMEZONES.map((tz) => `<option value="${tz}" ${tz === u.timezone ? 'selected' : ''}>${tz}</option>`).join('')}</select></div>
-        <div class="field"><label>À propos (affiché sur votre page)</label><textarea id="s-about">${esc(u.about)}</textarea></div>
+          <select id="s-tz">${TIMEZONES.map((tz) => `<option value="${tz}" ${tz === u.timezone ? 'selected' : ''}>${tz}</option>`).join('')}</select>
+          <div class="hint">Heure actuelle : ${new Date().toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</div></div>
         <div class="field"><label>Couleur de marque</label>
           <div class="color-picker" id="s-colors">
             ${COLORS.map((c) => `<div class="c ${u.brand_color === c ? 'selected' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}
@@ -540,6 +567,7 @@ function renderSettings() {
           <input type="hidden" id="s-color" value="${u.brand_color}">
         </div>
         <button class="btn btn-primary" id="s-save">Enregistrer les modifications</button>
+        <button class="btn btn-secondary" id="s-cancel">Annuler</button>
         <div class="error-msg" id="s-err"></div>
       </div>
     </div>
@@ -550,6 +578,14 @@ function renderSettings() {
         <div class="field"><label>Nouveau mot de passe</label><input type="password" id="p-new"></div>
         <button class="btn btn-secondary" id="p-save">Changer le mot de passe</button>
         <div class="error-msg" id="p-err"></div>
+      </div>
+    </div>
+    <div class="card" style="border-color:#fecaca;">
+      <div class="card-head"><h2 style="color:var(--red)">Zone dangereuse</h2></div>
+      <div class="card-body">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:14px;">La suppression de votre compte est définitive et efface tous vos événements et rendez-vous.</p>
+        <button class="btn btn-danger" id="s-delete">Supprimer le compte</button>
+        <div class="error-msg" id="d-err"></div>
       </div>
     </div>
   `;
@@ -569,17 +605,32 @@ function renderSettings() {
     const err = $('#s-err');
     err.textContent = '';
     try {
-      const { id, email, name, username, timezone, brand_color, about } = await api('/api/settings', { method: 'PUT', body: {
+      const res = await api('/api/settings', { method: 'PUT', body: {
         name: $('#s-name').value, username: $('#s-username').value, timezone: $('#s-tz').value,
-        brand_color: selColor, about: $('#s-about').value,
+        brand_color: selColor, about: state.user.about || '',
+        welcome_message: $('#s-welcome').value, language: $('#s-language').value,
+        date_format: $('#s-dateformat').value, time_format: $('#s-timeformat').value,
+        country: $('#s-country').value,
       }});
-      state.user = { id, email, name, username, timezone, brand_color, about };
-      $('#user-name').textContent = name;
-      $('#user-avatar').textContent = name.slice(0, 1).toUpperCase();
-      $('#share-link').href = '/' + username;
-      document.documentElement.style.setProperty('--blue', brand_color || '#0069ff');
+      state.user = { ...state.user, ...res };
+      $('#user-name').textContent = res.name;
+      $('#user-avatar').textContent = res.name.slice(0, 1).toUpperCase();
+      $('#share-link').href = '/' + res.username;
+      document.documentElement.style.setProperty('--blue', res.brand_color || '#0069ff');
       toast('Paramètres enregistrés');
     } catch (e) { err.textContent = e.message; }
+  });
+
+  $('#s-cancel').addEventListener('click', () => { renderSettings(); });
+
+  $('#s-delete').addEventListener('click', async () => {
+    if (!confirm('Voulez-vous vraiment supprimer définitivement votre compte et toutes vos données ?')) return;
+    const d = $('#d-err');
+    d.textContent = '';
+    try {
+      await api('/api/settings/account', { method: 'DELETE' });
+      window.location.href = '/';
+    } catch (e) { d.textContent = e.message; }
   });
 
   $('#p-save').addEventListener('click', async () => {
@@ -621,11 +672,15 @@ async function renderTeam() {
   const content = $('#content');
   content.innerHTML = `<div class="spinner"></div>`;
   try {
-    const [users, agencies] = await Promise.all([
+    const [users, agencies, siteSettings] = await Promise.all([
       api('/api/admin/users'),
       api('/api/admin/agencies'),
+      api('/api/admin/site-settings'),
     ]);
     teamState = { users, agencies };
+    state.siteName = siteSettings.site_name;
+    state.siteLogo = siteSettings.logo;
+    state.registration_enabled = siteSettings.registration_enabled;
 
     const agencyCards = agencies.map((a) => `
       <div class="event-row" style="cursor:default;">
@@ -662,6 +717,27 @@ async function renderTeam() {
     `).join('');
 
     content.innerHTML = `
+      <div class="card">
+        <div class="card-head"><h2>Paramètres du site</h2></div>
+        <div class="card-body">
+          <div class="field"><label>Nom du site</label><input type="text" id="ss-name" value="${esc(state.siteName || 'E-Lutetia Agenda')}"></div>
+          <div class="field"><label>Logo de la société (URL)</label>
+            <input type="text" id="ss-logo" value="${esc(state.siteLogo || '')}" placeholder="https://.../logo.png">
+            <div class="hint">Collez l'adresse (URL) de votre logo, ou laissez vide pour utiliser l'icône par défaut.</div>
+            ${state.siteLogo ? `<img src="${esc(state.siteLogo)}" style="max-height:50px;margin-top:8px;border-radius:8px;" alt="logo">` : ''}
+          </div>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:10px;">
+              <span class="toggle"><input type="checkbox" id="ss-reg" ${state.registration_enabled !== false ? 'checked' : ''}></span>
+              Autoriser l'inscription de nouveaux comptes sur le site
+            </label>
+            <div class="hint">Désactivez pour empêcher toute personne de créer un compte. Seuls les administrateurs pourront ajouter des membres.</div>
+          </div>
+          <button class="btn btn-primary" id="ss-save">Enregistrer</button>
+          <div class="error-msg" id="ss-err"></div>
+        </div>
+      </div>
+
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:16px;">
         <button class="btn btn-secondary" id="add-agency">+ Nouvelle agence</button>
         <button class="btn btn-primary" id="add-user">+ Ajouter un membre</button>
@@ -677,6 +753,23 @@ async function renderTeam() {
         ${userRows}
       </div>
     `;
+
+    // Réglages du site
+    $('#ss-save').addEventListener('click', async () => {
+      const err = $('#ss-err'); err.textContent='';
+      try {
+        await api('/api/admin/site-settings', { method: 'PUT', body: {
+          site_name: $('#ss-name').value,
+          logo: $('#ss-logo').value.trim(),
+          registration_enabled: $('#ss-reg').checked,
+        }});
+        state.siteName = $('#ss-name').value;
+        state.siteLogo = $('#ss-logo').value.trim();
+        state.registration_enabled = $('#ss-reg').checked;
+        toast('Paramètres du site enregistrés');
+        renderTeam();
+      } catch(e){ err.textContent = e.message; }
+    });
 
     // Boutons
     $('#add-agency').addEventListener('click', addAgencyModal);

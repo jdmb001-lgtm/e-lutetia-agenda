@@ -118,6 +118,11 @@ CREATE TABLE IF NOT EXISTS poll_votes (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS site_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_sul_token ON single_use_links(token);
 CREATE INDEX IF NOT EXISTS idx_poll_slug ON polls(slug);
 `);
@@ -135,6 +140,11 @@ ensureColumn('users', 'role', `role TEXT NOT NULL DEFAULT 'user'`);
 ensureColumn('users', 'agency_id', `agency_id INTEGER REFERENCES agencies(id) ON DELETE SET NULL`);
 ensureColumn('users', 'holidays', `holidays TEXT NOT NULL DEFAULT '[]'`);
 ensureColumn('users', 'max_daily_meetings', `max_daily_meetings INTEGER NOT NULL DEFAULT 0`);
+ensureColumn('users', 'welcome_message', `welcome_message TEXT NOT NULL DEFAULT ''`);
+ensureColumn('users', 'language', `language TEXT NOT NULL DEFAULT 'fr'`);
+ensureColumn('users', 'date_format', `date_format TEXT NOT NULL DEFAULT 'DD/MM/YYYY'`);
+ensureColumn('users', 'time_format', `time_format TEXT NOT NULL DEFAULT '24h'`);
+ensureColumn('users', 'country', `country TEXT NOT NULL DEFAULT 'France'`);
 
 ensureColumn('event_types', 'address', `address TEXT NOT NULL DEFAULT ''`);
 ensureColumn('event_types', 'organizer', `organizer TEXT NOT NULL DEFAULT ''`);

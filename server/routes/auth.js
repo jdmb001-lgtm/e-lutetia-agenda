@@ -27,6 +27,11 @@ function publicUser(u) {
     agency_id: u.agency_id || null,
     holidays,
     max_daily_meetings: Number(u.max_daily_meetings) || 0,
+    welcome_message: u.welcome_message || '',
+    language: u.language || 'fr',
+    date_format: u.date_format || 'DD/MM/YYYY',
+    time_format: u.time_format || '24h',
+    country: u.country || 'France',
   };
 }
 
@@ -69,6 +74,10 @@ function startSession(res, userId) {
 
 // Inscription
 router.post('/signup', (req, res) => {
+  const { publicSettings } = require('../lib/siteSettings');
+  if (publicSettings().registration_enabled === false) {
+    return res.status(403).json({ error: 'Les inscriptions sont actuellement fermées. Contactez un administrateur.' });
+  }
   const { email, password, name, username, timezone } = req.body || {};
   if (!email || !password || !name || !username) {
     return res.status(400).json({ error: 'Champs requis manquants' });

@@ -87,6 +87,7 @@ function renderShell() {
         <div class="bk-host-avatar" style="background:${e.color || '#0069ff'}">${hostInitial}</div>
         <h1>${escapeHtml(e.name)}</h1>
         <div class="bk-host">avec ${escapeHtml(e.organizer || e.host.name)}</div>
+        ${e.host.welcome_message ? `<div class="bk-desc">${escapeHtml(e.host.welcome_message)}</div>` : ''}
         ${e.description ? `<div class="bk-desc">${escapeHtml(e.description)}</div>` : ''}
         <div class="bk-meta">
           <div><span class="m-ico">⏱️</span> ${e.duration} min</div>

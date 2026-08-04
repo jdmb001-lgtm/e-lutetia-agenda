@@ -10,7 +10,7 @@ function getEventBySlug(username, slug) {
     .prepare(
       `SELECT e.*, u.username, u.name AS host_name, u.email AS host_email,
               u.timezone AS host_timezone, u.about AS host_about,
-              u.brand_color AS host_brand_color,
+              u.brand_color AS host_brand_color, u.welcome_message,
               u.holidays, u.max_daily_meetings
        FROM event_types e JOIN users u ON u.id = e.user_id
        WHERE u.username = ? AND e.slug = ?`
@@ -43,6 +43,7 @@ function publicEvent(e) {
       about: e.host_about,
       brand_color: e.host_brand_color,
       timezone: e.host_timezone,
+      welcome_message: e.welcome_message || '',
     },
     availability: windows,
   };
@@ -52,13 +53,21 @@ function getSingleLink(token) {
   return db.prepare(`
     SELECT s.*, e.*, u.username, u.name AS host_name, u.email AS host_email,
            u.timezone AS host_timezone, u.about AS host_about, u.brand_color AS host_brand_color,
-           u.holidays, u.max_daily_meetings
+           u.holidays, u.max_daily_meetings, u.welcome_message
     FROM single_use_links s
     JOIN event_types e ON e.id = s.event_type_id
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ?
   `).get(token);
 }
+
+// ===========================================================================
+// Réglages publics du site (logo, nom)
+// ===========================================================================
+router.get('/site-settings', (req, res) => {
+  const { publicSettings } = require('../lib/siteSettings');
+  res.json(publicSettings());
+});
 
 // ===========================================================================
 // Page publique d'une agence : infos + événements des membres
