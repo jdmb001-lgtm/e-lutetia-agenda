@@ -64,6 +64,16 @@ function fmtTime(iso, tz) {
   }
 }
 
+// Affiche une durée en minutes sous forme lisible (heures)
+function fmtDuration(mins) {
+  mins = Number(mins) || 0;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h}h${m < 10 ? '0' : ''}${m}`;
+  if (h > 0) return `${h}h`;
+  return `${m} min`;
+}
+
 // ============================ Auth guard ============================
 (async function boot() {
   try {
@@ -131,7 +141,7 @@ async function renderEvents() {
           <div>
             <div class="e-name">${esc(e.name)}</div>
             <div class="e-meta">
-              ${e.duration} min · ${esc(e.location_type === 'video' ? 'En visio' : e.location_type === 'in_person' ? 'En personne' : e.location_type === 'phone' ? 'Téléphone' : 'Personnalisé')}
+              ${fmtDuration(e.duration)} · ${esc(e.location_type === 'video' ? 'En visio' : e.location_type === 'in_person' ? 'En personne' : e.location_type === 'phone' ? 'Téléphone' : 'Personnalisé')}
               · <a href="${e.booking_url}" target="_blank" onclick="event.stopPropagation()">${esc(e.booking_url)}</a>
               ${e.is_active ? '<span class="badge badge-green" style="margin-left:6px;">Actif</span>' : '<span class="badge badge-gray" style="margin-left:6px;">Inactif</span>'}
             </div>
@@ -210,8 +220,9 @@ function openEventModal(existing) {
         </div>
         <div class="row-2">
           <div class="field">
-            <label>Durée (minutes)</label>
-            <input type="number" id="ev-duration" value="${e.duration}" min="5" step="5">
+            <label>Durée (heures)</label>
+            <input type="number" id="ev-duration" value="${(e.duration/60).toFixed(1)}" min="0.5" step="0.5">
+            <div class="hint">Ex. 1 = 1 heure, 0.5 = 30 min, 1.5 = 1h30.</div>
           </div>
           <div class="field">
             <label>Intervalle entre créneaux</label>
@@ -334,6 +345,7 @@ function openEventModal(existing) {
             <select class="cf-type" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;">
               <option value="text" ${f.type==='text'?'selected':''}>Texte</option>
               <option value="select" ${f.type==='select'?'selected':''}>Liste (choix)</option>
+              <option value="yesno" ${f.type==='yesno'?'selected':''}>Oui / Non (bascule)</option>
               <option value="tel" ${f.type==='tel'?'selected':''}>Téléphone</option>
               <option value="number" ${f.type==='number'?'selected':''}>Nombre</option>
             </select>
@@ -421,7 +433,7 @@ function openEventModal(existing) {
     });
     const payload = {
       name: $('#ev-name', overlay).value.trim(),
-      duration: parseInt($('#ev-duration', overlay).value, 10) || 30,
+      duration: Math.round((parseFloat($('#ev-duration', overlay).value) || 1) * 60),
       slot_interval: parseInt($('#ev-interval', overlay).value, 10) || 0,
       description: $('#ev-desc', overlay).value.trim(),
       location_type: $('#ev-loc', overlay).value,
@@ -962,7 +974,7 @@ async function renderLinks() {
       api('/api/scheduling/polls'),
       api('/api/events'),
     ]);
-    const eventOpts = events.map(e => `<option value="${e.id}">${esc(e.name)} (${e.duration} min)</option>`).join('');
+    const eventOpts = events.map(e => `<option value="${e.id}">${esc(e.name)} (${fmtDuration(e.duration)})</option>`).join('');
 
     const linkRows = links.map(l => `
       <div class="event-row" style="cursor:default;">

@@ -33,6 +33,14 @@ function fmtSlotTime(iso) {
     return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   }
 }
+function fmtDur(mins) {
+  mins = Number(mins) || 0;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h}h${m < 10 ? '0' : ''}${m}`;
+  if (h > 0) return `${h}h`;
+  return `${m} min`;
+}
 function fmtLongDate(iso) {
   try {
     return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ }).format(new Date(iso));
@@ -90,7 +98,7 @@ function renderShell() {
         ${e.host.welcome_message ? `<div class="bk-desc">${escapeHtml(e.host.welcome_message)}</div>` : ''}
         ${e.description ? `<div class="bk-desc">${escapeHtml(e.description)}</div>` : ''}
         <div class="bk-meta">
-          <div><span class="m-ico">⏱️</span> ${e.duration} min</div>
+          <div><span class="m-ico">⏱️</span> ${fmtDur(e.duration)}</div>
           <div><span class="m-ico">📍</span> ${escapeHtml(locLabel(e.location_type))}${e.location_detail ? ' · ' + escapeHtml(e.location_detail) : ''}</div>
           ${e.address ? `<div><span class="m-ico">🏢</span> ${escapeHtml(e.address)}</div>` : ''}
           <div><span class="m-ico">🕒</span> Fuseau : ${escapeHtml(e.host.timezone)}</div>
@@ -209,7 +217,7 @@ function renderStep(step) {
       ${dots}
       <div class="bk-step">
         <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:18px;">
-          <div style="font-weight:700;">${fmtSlotTime(S.selectedSlot)} · ${e.duration} min</div>
+          <div style="font-weight:700;">${fmtSlotTime(S.selectedSlot)} · ${fmtDur(e.duration)}</div>
           <div style="color:var(--muted);font-size:14px;">${fmtLongDate(S.selectedSlot)}</div>
         </div>
         <form class="bk-form" id="bk-form">
@@ -239,7 +247,7 @@ function renderStep(step) {
         <div class="check">✓</div>
         <h2>C'est confirmé !</h2>
         <div class="bk-when">${fmtLongDate(S.selectedSlot)}</div>
-        <div style="font-size:16px;font-weight:600;">${fmtSlotTime(S.selectedSlot)} · ${e.duration} min</div>
+        <div style="font-size:16px;font-weight:600;">${fmtSlotTime(S.selectedSlot)} · ${fmtDur(e.duration)}</div>
         <p>${escapeHtml(S.event.host.name)} a bien reçu votre demande de rendez-vous.<br>
         Un email de confirmation vous a été envoyé à <strong>${escapeHtml(S.inviteeEmail || 'votre adresse')}</strong>.</p>
         <button class="btn btn-secondary" id="new-booking">Réserver un autre créneau</button>
@@ -269,11 +277,32 @@ function renderCustomFields() {
     if (f.type === 'select') {
       const opts = (f.options || []).map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
       input = `<select id="${id}" ${f.required ? 'required' : ''}><option value="">Sélectionnez...</option>${opts}</select>`;
+    } else if (f.type === 'yesno') {
+      // Bascule Oui / Non
+      input = `<div class="yesno-toggle" data-target="${id}">
+        <button type="button" class="yn-btn yn-yes" data-val="Oui">Oui</button>
+        <button type="button" class="yn-btn yn-no" data-val="Non">Non</button>
+        <input type="hidden" id="${id}" value="" ${f.required ? 'required' : ''}>
+      </div>`;
     } else {
       input = `<input type="${f.type || 'text'}" id="${id}" ${f.required ? 'required' : ''}>`;
     }
     return `<label for="${id}">${escapeHtml(f.label)}${req}</label>${input}`;
   }).join('');
+
+  // Activer les bascules Oui/Non
+  box.querySelectorAll('.yesno-toggle').forEach((toggle) => {
+    const hidden = toggle.querySelector('input[type=hidden]');
+    const setVal = (v) => {
+      hidden.value = v;
+      toggle.querySelectorAll('.yn-btn').forEach((b) => b.classList.toggle('active', b.dataset.val === v));
+    };
+    toggle.querySelectorAll('.yn-btn').forEach((b) => b.addEventListener('click', () => {
+      setVal(b.dataset.val);
+      // valider le champ requis pour le formulaire
+      if (hidden.required) hidden.setCustomValidity('');
+    }));
+  });
 }
 
 async function confirmBooking() {

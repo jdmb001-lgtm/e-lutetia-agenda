@@ -20,7 +20,7 @@ router.get('/single-use-links', (req, res) => {
   res.json(rows.map((r) => ({
     id: r.id, token: r.token, used: !!r.used, expires_at: r.expires_at,
     event_name: r.event_name, event_id: r.event_type_id,
-    url: `/${r.username}/single/${r.token}`,
+    url: `/single/${r.token}`,
     created_at: r.created_at,
   })));
 });

@@ -221,6 +221,12 @@ footer { text-align: center; padding: 30px; color: var(--muted); font-size: 14px
 .slot-btn.selected { background: var(--blue); border-color: var(--blue); color: #fff; }
 
 .bk-form label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 5px; }
+
+/* Bascule Oui / Non pour les champs personnalisés */
+.yesno-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.yn-btn { padding: 9px 20px; border: none; background: #fff; font-weight: 600; font-size: 14px; color: var(--muted); }
+.yn-btn + .yn-btn { border-left: 1px solid var(--border); }
+.yn-btn.active { background: var(--blue); color: #fff; }
 .bk-form input, .bk-form textarea {
   width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; outline: none; font-size: 14px;
 }
